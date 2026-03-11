@@ -1,14 +1,19 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireManager, requireAdmin } = require('../middleware/auth');
 const router = express.Router();
 
 // Get all personnel (filtered by service_id for non-admin)
 router.get('/', requireAuth, (req, res) => {
   const user = req.session.user;
-  let rows;
+  
+  // Only admin and manager can see the full personnel list (others see nothing or restricted)
+  if (user.role === 'personel') {
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+  }
 
+  let rows;
   if (user.role === 'admin') {
     rows = db.prepare(`
       SELECT p.id, p.service_id, p.full_name, p.start_date, p.position, p.phone, p.phone2,
@@ -18,7 +23,7 @@ router.get('/', requireAuth, (req, res) => {
       LEFT JOIN authorized_services a ON p.service_id = a.id
       ORDER BY p.created_at DESC
     `).all();
-  } else {
+  } else { // Manager role
     rows = db.prepare(`
       SELECT p.id, p.service_id, p.full_name, p.start_date, p.position, p.phone, p.phone2,
              p.city, p.district, p.address, p.email, p.id_number, p.username, p.role, p.created_at,
@@ -33,13 +38,13 @@ router.get('/', requireAuth, (req, res) => {
   res.json(rows);
 });
 
-// Create new personnel
-router.post('/', requireAuth, (req, res) => {
+// Create new personnel (Admin or Manager)
+router.post('/', requireManager, (req, res) => {
   const user = req.session.user;
   const {
     full_name, start_date, position, phone, phone2,
     city, district, address, email, id_number,
-    username, password
+    username, password, role
   } = req.body;
 
   if (!full_name || !username || !password) {
@@ -54,28 +59,32 @@ router.post('/', requireAuth, (req, res) => {
 
   const serviceId = user.role === 'admin' ? (req.body.service_id || user.service_id) : user.service_id;
   const hash = bcrypt.hashSync(password, 10);
+  
+  // Manager can only create 'personel' or 'yönetici' in their own service.
+  const finalRole = user.role === 'admin' ? (role || 'personel') : 'personel';
 
   const result = db.prepare(`
     INSERT INTO personnel (service_id, full_name, start_date, position, phone, phone2,
                            city, district, address, email, id_number, username, password_hash, role)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user')
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(serviceId, full_name, start_date, position, phone, phone2,
-         city, district, address, email, id_number, username, hash);
+         city, district, address, email, id_number, username, hash, finalRole);
 
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
-// Update personnel (admin only)
-router.put('/:id', requireAuth, (req, res) => {
+// Update personnel (Admin or Manager)
+router.put('/:id', requireManager, (req, res) => {
   const user = req.session.user;
-
-  if (user.role !== 'admin') {
-    return res.status(403).json({ error: 'Bu işlem için admin yetkisi gerekiyor' });
-  }
-
   const person = db.prepare('SELECT * FROM personnel WHERE id = ?').get(req.params.id);
+
   if (!person) {
     return res.status(404).json({ error: 'Personel bulunamadı' });
+  }
+
+  // Manager can only update personnel in their own service center
+  if (user.role !== 'admin' && person.service_id !== user.service_id) {
+    return res.status(403).json({ error: 'Yetkiniz yok' });
   }
 
   const {
@@ -110,8 +119,8 @@ router.put('/:id', requireAuth, (req, res) => {
     email !== undefined ? email : person.email,
     id_number !== undefined ? id_number : person.id_number,
     username || person.username,
-    role || person.role,
-    service_id !== undefined ? service_id : person.service_id
+    user.role === 'admin' ? (role || person.role) : person.role,
+    user.role === 'admin' ? (service_id !== undefined ? service_id : person.service_id) : person.service_id
   ];
 
   if (password) {
@@ -128,5 +137,24 @@ router.put('/:id', requireAuth, (req, res) => {
 });
 
 // Delete personnel
+router.delete('/:id', requireManager, (req, res) => {
+  const user = req.session.user;
+  const person = db.prepare('SELECT * FROM personnel WHERE id = ?').get(req.params.id);
+
+  if (!person) {
+    return res.status(404).json({ error: 'Personel bulunamadı' });
+  }
+
+  if (person.role === 'admin') {
+    return res.status(403).json({ error: 'Admin hesabı silinemez' });
+  }
+
+  if (user.role !== 'admin' && person.service_id !== user.service_id) {
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+  }
+
+  db.prepare('DELETE FROM personnel WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
 
 module.exports = router;

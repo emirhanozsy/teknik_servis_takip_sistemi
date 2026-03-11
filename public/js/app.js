@@ -22,10 +22,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 function initApp() {
   // Set user info
   document.getElementById('userName').textContent = currentUser.full_name;
-  document.getElementById('userRole').textContent = currentUser.role === 'admin' 
-    ? 'Sistem Yöneticisi' 
-    : (currentUser.service_name || 'Personel');
+  const roleMap = {
+    'admin': 'Sistem Yöneticisi',
+    'yönetici': 'Hizmet Yöneticisi',
+    'personel': 'Saha Personeli'
+  };
+  document.getElementById('userRole').textContent = roleMap[currentUser.role] || (currentUser.service_name || 'Personel');
   document.getElementById('userAvatar').textContent = currentUser.full_name.charAt(0).toUpperCase();
+
+  // Hide Personnel for staff
+  if (currentUser.role === 'personel') {
+    document.querySelector('.nav-item[data-page="personnel"]')?.style.setProperty('display', 'none');
+  }
 
   // Admin class
   if (currentUser.role === 'admin') {
@@ -223,9 +231,11 @@ async function renderServicesPage(container) {
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                       </svg>
                     </button>
-                    <button class="btn-icon delete-service-btn" data-id="${s.id}" title="Sil">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    </button>
+                    ${(currentUser.role === 'admin' || currentUser.role === 'yönetici') ? `
+                      <button class="btn-icon delete-service-btn" data-id="${s.id}" title="Sil">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      </button>
+                    ` : ''}
                   </div>
                 </td>
               </tr>
@@ -489,10 +499,14 @@ async function openEditServiceModal(serviceId, services) {
   if (!s) return;
 
   const isAdmin = currentUser.role === 'admin';
+  const isManager = currentUser.role === 'yönetici';
+  const isStaff = currentUser.role === 'personel';
+  
   let servicesListHtml = '';
   
   if (isAdmin) {
     const authServices = await apiGet('/api/admin/authorized-services-list');
+    // ... rest of logic stays same but we refine isAdmin check below
     servicesListHtml = `
       <div class="form-group">
         <label>Yetkili Servis</label>
@@ -528,47 +542,47 @@ async function openEditServiceModal(serviceId, services) {
         <div class="form-section-title">Cihaz Bilgileri</div>
         <div class="form-group">
           <label>Cihaz Markası</label>
-          <input type="text" id="edit_svc_device_brand" value="${s.device_brand || ''}" ${!isAdmin ? 'readonly' : ''}>
+          <input type="text" id="edit_svc_device_brand" value="${s.device_brand || ''}" ${isStaff ? 'readonly' : ''}>
         </div>
         <div class="form-group">
           <label>Cihaz Türü</label>
-          <input type="text" id="edit_svc_device_type" value="${s.device_type || ''}" ${!isAdmin ? 'readonly' : ''}>
+          <input type="text" id="edit_svc_device_type" value="${s.device_type || ''}" ${isStaff ? 'readonly' : ''}>
         </div>
         <div class="form-group">
           <label>Cihaz Modeli</label>
-          <input type="text" id="edit_svc_device_model" value="${s.device_model || ''}" ${!isAdmin ? 'readonly' : ''}>
+          <input type="text" id="edit_svc_device_model" value="${s.device_model || ''}" ${isStaff ? 'readonly' : ''}>
         </div>
         <div class="form-group">
           <label>Garanti Süresi</label>
-          <input type="text" id="edit_svc_warranty_period" value="${s.warranty_period || ''}" ${!isAdmin ? 'readonly' : ''}>
+          <input type="text" id="edit_svc_warranty_period" value="${s.warranty_period || ''}" ${isStaff ? 'readonly' : ''}>
         </div>
         <div class="form-group full-width">
           <label>Cihaz Arızası</label>
-          <textarea id="edit_svc_device_fault" ${!isAdmin ? 'readonly' : ''}>${s.device_fault || ''}</textarea>
+          <textarea id="edit_svc_device_fault" ${isStaff ? 'readonly' : ''}>${s.device_fault || ''}</textarea>
         </div>
         
         <div class="form-section-title">Randevu Bilgileri</div>
         <div class="form-group">
           <label>Müsait Olma Tarihi</label>
-          <input type="date" id="edit_svc_availability_date" value="${s.availability_date || ''}" ${!isAdmin ? 'readonly' : ''}>
+          <input type="date" id="edit_svc_availability_date" value="${s.availability_date || ''}" ${isStaff ? 'readonly' : ''}>
         </div>
         <div class="form-group">
           <label>Saat Başlangıç</label>
-          <input type="time" id="edit_svc_time_start" value="${s.time_start || ''}" ${!isAdmin ? 'readonly' : ''}>
+          <input type="time" id="edit_svc_time_start" value="${s.time_start || ''}" ${isStaff ? 'readonly' : ''}>
         </div>
         <div class="form-group">
           <label>Saat Bitiş</label>
-          <input type="time" id="edit_svc_time_end" value="${s.time_end || ''}" ${!isAdmin ? 'readonly' : ''}>
+          <input type="time" id="edit_svc_time_end" value="${s.time_end || ''}" ${isStaff ? 'readonly' : ''}>
         </div>
 
         <div class="form-section-title">Notlar</div>
         <div class="form-group full-width">
           <label>Operatör Notu</label>
-          <textarea id="edit_svc_operator_note" ${!isAdmin ? 'readonly' : ''}>${s.operator_note || ''}</textarea>
+          <textarea id="edit_svc_operator_note" ${isStaff ? 'readonly' : ''}>${s.operator_note || ''}</textarea>
         </div>
       </div>
       <div id="edit_svc_error" class="error-message" style="display:none;margin-top:1rem;"></div>
-      ${!isAdmin ? '<p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem;">Not: Personel yetkisiyle sadece durum bilgisini değiştirebilirsiniz.</p>' : ''}
+      ${isStaff ? '<p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem;">Not: Personel yetkisiyle sadece durum bilgisini değiştirebilirsiniz.</p>' : ''}
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">İptal</button>
@@ -584,10 +598,9 @@ async function openEditServiceModal(serviceId, services) {
       status: document.getElementById('edit_svc_status').value
     };
 
-    if (isAdmin) {
+    if (isAdmin || isManager) {
       data = {
         ...data,
-        service_id: document.getElementById('edit_svc_assigned_service_id').value || null,
         device_brand: document.getElementById('edit_svc_device_brand').value.trim(),
         device_type: document.getElementById('edit_svc_device_type').value.trim(),
         device_model: document.getElementById('edit_svc_device_model').value.trim(),
@@ -598,6 +611,10 @@ async function openEditServiceModal(serviceId, services) {
         time_start: document.getElementById('edit_svc_time_start').value,
         time_end: document.getElementById('edit_svc_time_end').value
       };
+      
+      if (isAdmin) {
+        data.service_id = document.getElementById('edit_svc_assigned_service_id').value || null;
+      }
     }
 
     const result = await apiPut(`/api/services/${serviceId}`, data);
@@ -945,14 +962,13 @@ async function openNewPersonnelModal() {
           <input type="text" id="pers_id_number" placeholder="TC Kimlik No">
         </div>
 
-        <div class="form-section-title">Giriş Bilgileri</div>
         <div class="form-group">
-          <label>Kullanıcı Adı *</label>
-          <input type="text" id="pers_username" placeholder="Kullanıcı adı" required>
-        </div>
-        <div class="form-group">
-          <label>Şifre *</label>
-          <input type="password" id="pers_password" placeholder="Şifre" required>
+          <label>Yetki / Rol *</label>
+          <select id="pers_role" required>
+            <option value="personel">Saha Personeli</option>
+            ${currentUser.role === 'admin' ? '<option value="yönetici">Hizmet Yöneticisi</option>' : ''}
+            ${currentUser.role === 'admin' ? '<option value="admin">Sistem Yöneticisi</option>' : ''}
+          </select>
         </div>
       </div>
       <div id="pers_error" class="error-message" style="display:none;margin-top:1rem;"></div>
@@ -979,7 +995,8 @@ async function openNewPersonnelModal() {
       email: document.getElementById('pers_email').value.trim(),
       id_number: document.getElementById('pers_id_number').value.trim(),
       username: document.getElementById('pers_username').value.trim(),
-      password: document.getElementById('pers_password').value
+      password: document.getElementById('pers_password').value,
+      role: document.getElementById('pers_role').value
     };
 
     const serviceEl = document.getElementById('pers_service_id');
@@ -1080,13 +1097,15 @@ async function openEditPersonnelModal(personnelId, personnelList) {
         </div>
         <div class="form-group">
           <label>Yetki / Rol</label>
-          <select id="edit_pers_role">
-            <option value="user" ${p.role === 'user' ? 'selected' : ''}>Personel</option>
-            <option value="admin" ${p.role === 'admin' ? 'selected' : ''}>Admin</option>
+          <select id="edit_pers_role" ${currentUser.role !== 'admin' ? 'disabled' : ''}>
+            <option value="personel" ${p.role === 'personel' ? 'selected' : ''}>Saha Personeli</option>
+            <option value="yönetici" ${p.role === 'yönetici' ? 'selected' : ''}>Hizmet Yöneticisi</option>
+            <option value="admin" ${p.role === 'admin' ? 'selected' : ''}>Sistem Yöneticisi</option>
           </select>
         </div>
       </div>
       <div id="edit_pers_error" class="error-message" style="display:none;margin-top:1rem;"></div>
+      ${currentUser.role !== 'admin' ? '<p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem;">Not: Rol ve servis değişikliği sadece sistem yöneticisi tarafından yapılabilir.</p>' : ''}
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">İptal</button>

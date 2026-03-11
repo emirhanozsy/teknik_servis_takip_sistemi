@@ -83,6 +83,7 @@ router.put('/:id', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Yetkiniz yok' });
   }
 
+  // Permissions: Admin can update everything. Manager can update everything in their service. Staff only status.
   if (user.role === 'admin') {
     // Admin can update everything
     const {
@@ -111,8 +112,35 @@ router.put('/:id', requireAuth, (req, res) => {
       status || serviceRecord.status,
       req.params.id
     );
+  } else if (user.role === 'yönetici') {
+    // Manager can update all details for their own service
+    const {
+      device_brand, device_type, device_model,
+      device_fault, operator_note, warranty_period,
+      availability_date, time_start, time_end, status
+    } = req.body;
+
+    db.prepare(`
+      UPDATE services SET 
+        device_brand = ?, device_type = ?, device_model = ?,
+        device_fault = ?, operator_note = ?, warranty_period = ?, 
+        availability_date = ?, time_start = ?, time_end = ?, status = ?
+      WHERE id = ?
+    `).run(
+      device_brand !== undefined ? device_brand : serviceRecord.device_brand,
+      device_type !== undefined ? device_type : serviceRecord.device_type,
+      device_model !== undefined ? device_model : serviceRecord.device_model,
+      device_fault !== undefined ? device_fault : serviceRecord.device_fault,
+      operator_note !== undefined ? operator_note : serviceRecord.operator_note,
+      warranty_period !== undefined ? warranty_period : serviceRecord.warranty_period,
+      availability_date !== undefined ? availability_date : serviceRecord.availability_date,
+      time_start !== undefined ? time_start : serviceRecord.time_start,
+      time_end !== undefined ? time_end : serviceRecord.time_end,
+      status || serviceRecord.status,
+      req.params.id
+    );
   } else {
-    // Personnel can only update status
+    // Personnel (staff) can only update status
     const { status } = req.body;
     if (status) {
       db.prepare('UPDATE services SET status = ? WHERE id = ?').run(status, req.params.id);

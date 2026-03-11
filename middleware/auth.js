@@ -6,13 +6,20 @@ function requireAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ error: 'Oturum açmanız gerekiyor' });
-  }
-  if (req.session.user.role !== 'admin') {
+  if (!req.session || !req.session.user || req.session.user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin yetkisi gerekiyor' });
   }
   next();
 }
 
-module.exports = { requireAuth, requireAdmin };
+function requireManager(req, res, next) {
+  if (!req.session || !req.session.user) {
+    return res.status(401).json({ error: 'Oturum açmanız gerekiyor' });
+  }
+  if (req.session.user.role !== 'admin' && req.session.user.role !== 'yönetici') {
+    return res.status(403).json({ error: 'Yönetici veya Admin yetkisi gerekiyor' });
+  }
+  next();
+}
+
+module.exports = { requireAuth, requireAdmin, requireManager };
