@@ -1,0 +1,921 @@
+// ===== Teknik Servis Yönetim Sistemi - Frontend App =====
+
+let currentUser = null;
+let currentPage = 'services';
+
+// ===== Init =====
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const res = await fetch('/api/auth/me');
+    const data = await res.json();
+    if (!data.user) {
+      window.location.href = '/';
+      return;
+    }
+    currentUser = data.user;
+    initApp();
+  } catch {
+    window.location.href = '/';
+  }
+});
+
+function initApp() {
+  // Set user info
+  document.getElementById('userName').textContent = currentUser.full_name;
+  document.getElementById('userRole').textContent = currentUser.role === 'admin' 
+    ? 'Sistem Yöneticisi' 
+    : (currentUser.service_name || 'Personel');
+  document.getElementById('userAvatar').textContent = currentUser.full_name.charAt(0).toUpperCase();
+
+  // Admin class
+  if (currentUser.role === 'admin') {
+    document.body.classList.add('is-admin');
+  }
+
+  // Navigation
+  document.querySelectorAll('.nav-item[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentPage = btn.dataset.page;
+      renderPage(currentPage);
+    });
+  });
+
+  // Logout
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/';
+  });
+
+  // Modal close on overlay click
+  document.getElementById('modalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'modalOverlay') closeModal();
+  });
+
+  // Render initial page
+  renderPage('services');
+}
+
+// ===== Page Router =====
+function renderPage(page) {
+  const main = document.getElementById('mainContent');
+  switch (page) {
+    case 'services': renderServicesPage(main); break;
+    case 'customers': renderCustomersPage(main); break;
+    case 'personnel': renderPersonnelPage(main); break;
+    case 'admin': renderAdminPage(main); break;
+  }
+}
+
+// ===== Utility Functions =====
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function getStatusBadge(status) {
+  const map = {
+    'Beklemede': 'badge-waiting',
+    'Devam Ediyor': 'badge-progress',
+    'Tamamlandı': 'badge-done',
+    'İptal': 'badge-cancelled'
+  };
+  return `<span class="badge ${map[status] || 'badge-waiting'}">${status || 'Beklemede'}</span>`;
+}
+
+function openModal(html) {
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+}
+
+async function apiGet(url) {
+  const res = await fetch(url);
+  if (res.status === 401) { window.location.href = '/'; return []; }
+  return await res.json();
+}
+
+async function apiPost(url, data) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return await res.json();
+}
+
+async function apiPut(url, data) {
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return await res.json();
+}
+
+async function apiDelete(url) {
+  const res = await fetch(url, { method: 'DELETE' });
+  return await res.json();
+}
+
+// ===== SERVICES PAGE =====
+async function renderServicesPage(container) {
+  const services = await apiGet('/api/services');
+
+  const totalCount = services.length;
+  const waitingCount = services.filter(s => s.status === 'Beklemede').length;
+  const progressCount = services.filter(s => s.status === 'Devam Ediyor').length;
+  const doneCount = services.filter(s => s.status === 'Tamamlandı').length;
+
+  container.innerHTML = `
+    <div class="page-header">
+      <h1>Servisler</h1>
+      <div class="page-header-actions">
+        <button class="btn-primary" id="newServiceBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Yeni Servis
+        </button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card accent">
+        <div class="stat-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        </div>
+        <div class="stat-label">Toplam Servis</div>
+        <div class="stat-value">${totalCount}</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="stat-label">Beklemede</div>
+        <div class="stat-value">${waitingCount}</div>
+      </div>
+      <div class="stat-card info">
+        <div class="stat-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </div>
+        <div class="stat-label">Devam Ediyor</div>
+        <div class="stat-value">${progressCount}</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="stat-label">Tamamlandı</div>
+        <div class="stat-value">${doneCount}</div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      ${services.length === 0 ? `
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
+          <h3>Henüz servis kaydı yok</h3>
+          <p>Yeni bir servis kaydı oluşturmak için yukarıdaki butonu kullanın</p>
+        </div>
+      ` : `
+        <table>
+          <thead>
+            <tr>
+              <th>Tarih</th>
+              <th>Müşteri</th>
+              <th>Cihaz</th>
+              <th>Arıza</th>
+              <th>Durum</th>
+              <th>Servis Sahibi</th>
+              ${currentUser.role === 'admin' ? '<th>Yetkili Servis</th>' : ''}
+              <th>İşlem</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${services.map(s => `
+              <tr>
+                <td>${formatDate(s.created_at)}</td>
+                <td>${s.customer_name || '-'}</td>
+                <td>${[s.device_brand, s.device_model].filter(Boolean).join(' ') || '-'}</td>
+                <td>${s.device_fault || '-'}</td>
+                <td>${getStatusBadge(s.status)}</td>
+                <td>${s.personnel_name || '-'}</td>
+                ${currentUser.role === 'admin' ? `<td>${s.authorized_service_name || '-'}</td>` : ''}
+                <td>
+                  <div style="display:flex;gap:0.25rem;">
+                    <select class="status-select" data-id="${s.id}" style="padding:0.3rem;font-size:0.8rem;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);">
+                      <option value="Beklemede" ${s.status === 'Beklemede' ? 'selected' : ''}>Beklemede</option>
+                      <option value="Devam Ediyor" ${s.status === 'Devam Ediyor' ? 'selected' : ''}>Devam Ediyor</option>
+                      <option value="Tamamlandı" ${s.status === 'Tamamlandı' ? 'selected' : ''}>Tamamlandı</option>
+                      <option value="İptal" ${s.status === 'İptal' ? 'selected' : ''}>İptal</option>
+                    </select>
+                    <button class="btn-icon delete-service-btn" data-id="${s.id}" title="Sil">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+  `;
+
+  // Event listeners
+  document.getElementById('newServiceBtn')?.addEventListener('click', openNewServiceModal);
+
+  document.querySelectorAll('.status-select').forEach(sel => {
+    sel.addEventListener('change', async (e) => {
+      await apiPut(`/api/services/${e.target.dataset.id}`, { status: e.target.value });
+      renderServicesPage(container);
+    });
+  });
+
+  document.querySelectorAll('.delete-service-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Bu servis kaydını silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/services/${btn.dataset.id}`);
+        renderServicesPage(container);
+      }
+    });
+  });
+}
+
+// ===== New Service Modal =====
+async function openNewServiceModal() {
+  let servicesListHtml = '';
+  if (currentUser.role === 'admin') {
+    const authServices = await apiGet('/api/admin/authorized-services-list');
+    servicesListHtml = `
+      <div class="form-group">
+        <label>Yetkili Servis</label>
+        <select id="svc_assigned_service_id">
+          <option value="">Seçiniz</option>
+          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
+
+  openModal(`
+    <div class="modal-header">
+      <h2>Yeni Servis Kaydı</h2>
+      <button class="btn-icon" onclick="closeModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-section-title">Müşteri Bilgileri</div>
+        ${servicesListHtml}
+        <div class="form-group">
+          <label>Müşteri Tipi</label>
+          <select id="svc_customer_type">
+            <option value="bireysel">Bireysel</option>
+            <option value="kurumsal">Kurumsal</option>
+          </select>
+        </div>
+        <div class="form-group autocomplete-wrapper">
+          <label>Müşteri Adı</label>
+          <input type="text" id="svc_customer_name" placeholder="Müşteri adını girin veya arayın" autocomplete="off">
+          <input type="hidden" id="svc_customer_id">
+          <div class="autocomplete-list" id="svc_autocomplete_list"></div>
+        </div>
+        <div class="form-group">
+          <label>Telefon</label>
+          <input type="tel" id="svc_phone" placeholder="Telefon numarası">
+        </div>
+        <div class="form-group">
+          <label>Telefon 2</label>
+          <input type="tel" id="svc_phone2" placeholder="Alternatif telefon">
+        </div>
+        <div class="form-group">
+          <label>İl</label>
+          <input type="text" id="svc_city" placeholder="İl">
+        </div>
+        <div class="form-group">
+          <label>İlçe</label>
+          <input type="text" id="svc_district" placeholder="İlçe">
+        </div>
+        <div class="form-group full-width">
+          <label>Adres</label>
+          <textarea id="svc_address" placeholder="Açık adres"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Kimlik No</label>
+          <input type="text" id="svc_id_number" placeholder="TC Kimlik No">
+        </div>
+        <div class="form-group">
+          <label>Müsait Olma Tarihi</label>
+          <input type="date" id="svc_availability_date">
+        </div>
+        <div class="form-group">
+          <label>Saat Başlangıç</label>
+          <input type="time" id="svc_time_start">
+        </div>
+        <div class="form-group">
+          <label>Saat Bitiş</label>
+          <input type="time" id="svc_time_end">
+        </div>
+
+        <div class="form-section-title">Cihaz Bilgileri</div>
+        <div class="form-group">
+          <label>Cihaz Markası</label>
+          <input type="text" id="svc_device_brand" placeholder="Marka">
+        </div>
+        <div class="form-group">
+          <label>Cihaz Türü</label>
+          <input type="text" id="svc_device_type" placeholder="Tür (ör: Laptop, Telefon)">
+        </div>
+        <div class="form-group">
+          <label>Cihaz Modeli</label>
+          <input type="text" id="svc_device_model" placeholder="Model">
+        </div>
+        <div class="form-group">
+          <label>Garanti Süresi</label>
+          <input type="text" id="svc_warranty_period" placeholder="Ör: 6 ay">
+        </div>
+        <div class="form-group full-width">
+          <label>Cihaz Arızası</label>
+          <textarea id="svc_device_fault" placeholder="Arıza detaylarını yazın"></textarea>
+        </div>
+        <div class="form-group full-width">
+          <label>Operatör Notu</label>
+          <textarea id="svc_operator_note" placeholder="Eklemek istediğiniz notlar"></textarea>
+        </div>
+      </div>
+      <div id="svc_error" class="error-message" style="display:none;margin-top:1rem;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">İptal</button>
+      <button class="btn-primary" id="saveServiceBtn">Kaydet</button>
+    </div>
+  `);
+
+  // Autocomplete
+  setupCustomerAutocomplete();
+
+  // Save service
+  document.getElementById('saveServiceBtn').addEventListener('click', saveNewService);
+}
+
+function setupCustomerAutocomplete() {
+  const input = document.getElementById('svc_customer_name');
+  const list = document.getElementById('svc_autocomplete_list');
+  let debounceTimer;
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = input.value.trim();
+    document.getElementById('svc_customer_id').value = '';
+
+    if (q.length < 2) {
+      list.classList.remove('show');
+      return;
+    }
+
+    debounceTimer = setTimeout(async () => {
+      const results = await apiGet(`/api/customers/search?q=${encodeURIComponent(q)}`);
+      if (results.length === 0) {
+        list.classList.remove('show');
+        return;
+      }
+
+      list.innerHTML = results.map(c => `
+        <div class="autocomplete-item" data-id="${c.id}" data-name="${c.full_name}"
+             data-type="${c.customer_type}" data-phone="${c.phone || ''}" data-phone2="${c.phone2 || ''}"
+             data-city="${c.city || ''}" data-district="${c.district || ''}"
+             data-address="${c.address || ''}" data-idnumber="${c.id_number || ''}">
+          ${c.full_name}
+          <div class="sub">${c.phone || ''} - ${c.city || ''}</div>
+        </div>
+      `).join('');
+      list.classList.add('show');
+
+      list.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', () => {
+          document.getElementById('svc_customer_id').value = item.dataset.id;
+          document.getElementById('svc_customer_name').value = item.dataset.name;
+          document.getElementById('svc_customer_type').value = item.dataset.type || 'bireysel';
+          document.getElementById('svc_phone').value = item.dataset.phone;
+          document.getElementById('svc_phone2').value = item.dataset.phone2;
+          document.getElementById('svc_city').value = item.dataset.city;
+          document.getElementById('svc_district').value = item.dataset.district;
+          document.getElementById('svc_address').value = item.dataset.address;
+          document.getElementById('svc_id_number').value = item.dataset.idnumber;
+          list.classList.remove('show');
+        });
+      });
+    }, 300);
+  });
+
+  // Close autocomplete on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.autocomplete-wrapper')) {
+      list.classList.remove('show');
+    }
+  });
+}
+
+async function saveNewService() {
+  const errorEl = document.getElementById('svc_error');
+  errorEl.style.display = 'none';
+
+  const data = {
+    customer_id: document.getElementById('svc_customer_id').value || null,
+    customer_type: document.getElementById('svc_customer_type').value,
+    customer_name: document.getElementById('svc_customer_name').value.trim(),
+    phone: document.getElementById('svc_phone').value.trim(),
+    phone2: document.getElementById('svc_phone2').value.trim(),
+    city: document.getElementById('svc_city').value.trim(),
+    district: document.getElementById('svc_district').value.trim(),
+    address: document.getElementById('svc_address').value.trim(),
+    id_number: document.getElementById('svc_id_number').value.trim(),
+    availability_date: document.getElementById('svc_availability_date').value,
+    time_start: document.getElementById('svc_time_start').value,
+    time_end: document.getElementById('svc_time_end').value,
+    device_brand: document.getElementById('svc_device_brand').value.trim(),
+    device_type: document.getElementById('svc_device_type').value.trim(),
+    device_model: document.getElementById('svc_device_model').value.trim(),
+    device_fault: document.getElementById('svc_device_fault').value.trim(),
+    operator_note: document.getElementById('svc_operator_note').value.trim(),
+    warranty_period: document.getElementById('svc_warranty_period').value.trim()
+  };
+
+  // Admin: assigned service
+  const assignedEl = document.getElementById('svc_assigned_service_id');
+  if (assignedEl) {
+    data.assigned_service_id = assignedEl.value || null;
+  }
+
+  if (!data.customer_name) {
+    errorEl.textContent = 'Müşteri adı gereklidir';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  const result = await apiPost('/api/services', data);
+  if (result.success) {
+    closeModal();
+    renderPage('services');
+  } else {
+    errorEl.textContent = result.error || 'Bir hata oluştu';
+    errorEl.style.display = 'block';
+  }
+}
+
+// ===== CUSTOMERS PAGE =====
+async function renderCustomersPage(container) {
+  const customers = await apiGet('/api/customers');
+
+  container.innerHTML = `
+    <div class="page-header">
+      <h1>Müşteriler</h1>
+      <div class="page-header-actions">
+        <div class="search-bar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="customerSearchInput" placeholder="Müşteri ara...">
+        </div>
+        <button class="btn-primary" id="newCustomerBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Yeni Müşteri
+        </button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      ${customers.length === 0 ? `
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+          </svg>
+          <h3>Henüz müşteri kaydı yok</h3>
+          <p>Yeni müşteri eklemek için yukarıdaki butonu kullanın</p>
+        </div>
+      ` : `
+        <table>
+          <thead>
+            <tr>
+              <th>Eklenme Tarihi</th>
+              <th>Müşteri Adı</th>
+              <th>Telefon</th>
+              <th>İl / İlçe</th>
+              <th>Adres</th>
+              ${currentUser.role === 'admin' ? '<th>Yetkili Servis</th>' : ''}
+              <th>İşlem</th>
+            </tr>
+          </thead>
+          <tbody id="customersTableBody">
+            ${customers.map(c => `
+              <tr data-name="${(c.full_name || '').toLowerCase()}">
+                <td>${formatDate(c.created_at)}</td>
+                <td>${c.full_name || '-'}</td>
+                <td>${c.phone || '-'}</td>
+                <td>${[c.city, c.district].filter(Boolean).join(' / ') || '-'}</td>
+                <td>${c.address || '-'}</td>
+                ${currentUser.role === 'admin' ? `<td>${c.authorized_service_name || '-'}</td>` : ''}
+                <td>
+                  <button class="btn-danger btn-sm delete-customer-btn" data-id="${c.id}">Sil</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+  `;
+
+  // Search
+  document.getElementById('customerSearchInput')?.addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll('#customersTableBody tr').forEach(tr => {
+      const name = tr.dataset.name || '';
+      tr.style.display = name.includes(q) ? '' : 'none';
+    });
+  });
+
+  // New customer
+  document.getElementById('newCustomerBtn')?.addEventListener('click', openNewCustomerModal);
+
+  // Delete
+  document.querySelectorAll('.delete-customer-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Bu müşteriyi silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/customers/${btn.dataset.id}`);
+        renderCustomersPage(container);
+      }
+    });
+  });
+}
+
+function openNewCustomerModal() {
+  openModal(`
+    <div class="modal-header">
+      <h2>Yeni Müşteri</h2>
+      <button class="btn-icon" onclick="closeModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Müşteri Tipi</label>
+          <select id="cust_customer_type">
+            <option value="bireysel">Bireysel</option>
+            <option value="kurumsal">Kurumsal</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Müşteri Adı *</label>
+          <input type="text" id="cust_full_name" placeholder="Ad Soyad" required>
+        </div>
+        <div class="form-group">
+          <label>Telefon</label>
+          <input type="tel" id="cust_phone" placeholder="Telefon numarası">
+        </div>
+        <div class="form-group">
+          <label>Telefon 2</label>
+          <input type="tel" id="cust_phone2" placeholder="Alternatif telefon">
+        </div>
+        <div class="form-group">
+          <label>İl</label>
+          <input type="text" id="cust_city" placeholder="İl">
+        </div>
+        <div class="form-group">
+          <label>İlçe</label>
+          <input type="text" id="cust_district" placeholder="İlçe">
+        </div>
+        <div class="form-group full-width">
+          <label>Adres</label>
+          <textarea id="cust_address" placeholder="Açık adres"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Kimlik No</label>
+          <input type="text" id="cust_id_number" placeholder="TC Kimlik No">
+        </div>
+      </div>
+      <div id="cust_error" class="error-message" style="display:none;margin-top:1rem;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">İptal</button>
+      <button class="btn-primary" id="saveCustomerBtn">Kaydet</button>
+    </div>
+  `);
+
+  document.getElementById('saveCustomerBtn').addEventListener('click', async () => {
+    const errorEl = document.getElementById('cust_error');
+    errorEl.style.display = 'none';
+
+    const data = {
+      customer_type: document.getElementById('cust_customer_type').value,
+      full_name: document.getElementById('cust_full_name').value.trim(),
+      phone: document.getElementById('cust_phone').value.trim(),
+      phone2: document.getElementById('cust_phone2').value.trim(),
+      city: document.getElementById('cust_city').value.trim(),
+      district: document.getElementById('cust_district').value.trim(),
+      address: document.getElementById('cust_address').value.trim(),
+      id_number: document.getElementById('cust_id_number').value.trim()
+    };
+
+    if (!data.full_name) {
+      errorEl.textContent = 'Müşteri adı gereklidir';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    const result = await apiPost('/api/customers', data);
+    if (result.success) {
+      closeModal();
+      renderPage('customers');
+    } else {
+      errorEl.textContent = result.error || 'Bir hata oluştu';
+      errorEl.style.display = 'block';
+    }
+  });
+}
+
+// ===== PERSONNEL PAGE =====
+async function renderPersonnelPage(container) {
+  const personnel = await apiGet('/api/personnel');
+
+  container.innerHTML = `
+    <div class="page-header">
+      <h1>Personeller</h1>
+      <div class="page-header-actions">
+        <button class="btn-primary" id="newPersonnelBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Yeni Personel
+        </button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      ${personnel.length === 0 ? `
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          <h3>Henüz personel kaydı yok</h3>
+          <p>Yeni personel eklemek için yukarıdaki butonu kullanın</p>
+        </div>
+      ` : `
+        <table>
+          <thead>
+            <tr>
+              <th>Ad Soyad</th>
+              <th>Pozisyon</th>
+              <th>Başlama Tarihi</th>
+              <th>Telefon</th>
+              <th>E-posta</th>
+              <th>Kullanıcı Adı</th>
+              ${currentUser.role === 'admin' ? '<th>Yetkili Servis</th>' : ''}
+              <th>İşlem</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${personnel.map(p => `
+              <tr>
+                <td>${p.full_name}</td>
+                <td>${p.position || '-'}</td>
+                <td>${formatDate(p.start_date)}</td>
+                <td>${p.phone || '-'}</td>
+                <td>${p.email || '-'}</td>
+                <td>${p.username}</td>
+                ${currentUser.role === 'admin' ? `<td>${p.authorized_service_name || '-'}</td>` : ''}
+                <td>
+                  ${p.role !== 'admin' ? `
+                    <button class="btn-danger btn-sm delete-personnel-btn" data-id="${p.id}">Sil</button>
+                  ` : '<span class="badge badge-done">Admin</span>'}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+  `;
+
+  document.getElementById('newPersonnelBtn')?.addEventListener('click', openNewPersonnelModal);
+
+  document.querySelectorAll('.delete-personnel-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Bu personeli silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/personnel/${btn.dataset.id}`);
+        renderPersonnelPage(container);
+      }
+    });
+  });
+}
+
+async function openNewPersonnelModal() {
+  let servicesListHtml = '';
+  if (currentUser.role === 'admin') {
+    const authServices = await apiGet('/api/admin/authorized-services-list');
+    servicesListHtml = `
+      <div class="form-group">
+        <label>Yetkili Servis *</label>
+        <select id="pers_service_id" required>
+          <option value="">Seçiniz</option>
+          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
+
+  openModal(`
+    <div class="modal-header">
+      <h2>Yeni Personel</h2>
+      <button class="btn-icon" onclick="closeModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-section-title">Kişisel Bilgiler</div>
+        ${servicesListHtml}
+        <div class="form-group">
+          <label>Ad Soyad *</label>
+          <input type="text" id="pers_full_name" placeholder="Ad Soyad" required>
+        </div>
+        <div class="form-group">
+          <label>Pozisyon</label>
+          <input type="text" id="pers_position" placeholder="Pozisyon">
+        </div>
+        <div class="form-group">
+          <label>Başlama Tarihi</label>
+          <input type="date" id="pers_start_date">
+        </div>
+        <div class="form-group">
+          <label>Telefon</label>
+          <input type="tel" id="pers_phone" placeholder="Telefon">
+        </div>
+        <div class="form-group">
+          <label>Telefon 2</label>
+          <input type="tel" id="pers_phone2" placeholder="Alternatif telefon">
+        </div>
+        <div class="form-group">
+          <label>İl</label>
+          <input type="text" id="pers_city" placeholder="İl">
+        </div>
+        <div class="form-group">
+          <label>İlçe</label>
+          <input type="text" id="pers_district" placeholder="İlçe">
+        </div>
+        <div class="form-group full-width">
+          <label>Adres</label>
+          <textarea id="pers_address" placeholder="Açık adres"></textarea>
+        </div>
+        <div class="form-group">
+          <label>E-posta</label>
+          <input type="email" id="pers_email" placeholder="E-posta">
+        </div>
+        <div class="form-group">
+          <label>Kimlik No</label>
+          <input type="text" id="pers_id_number" placeholder="TC Kimlik No">
+        </div>
+
+        <div class="form-section-title">Giriş Bilgileri</div>
+        <div class="form-group">
+          <label>Kullanıcı Adı *</label>
+          <input type="text" id="pers_username" placeholder="Kullanıcı adı" required>
+        </div>
+        <div class="form-group">
+          <label>Şifre *</label>
+          <input type="password" id="pers_password" placeholder="Şifre" required>
+        </div>
+      </div>
+      <div id="pers_error" class="error-message" style="display:none;margin-top:1rem;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">İptal</button>
+      <button class="btn-primary" id="savePersonnelBtn">Kaydet</button>
+    </div>
+  `);
+
+  document.getElementById('savePersonnelBtn').addEventListener('click', async () => {
+    const errorEl = document.getElementById('pers_error');
+    errorEl.style.display = 'none';
+
+    const data = {
+      full_name: document.getElementById('pers_full_name').value.trim(),
+      position: document.getElementById('pers_position').value.trim(),
+      start_date: document.getElementById('pers_start_date').value,
+      phone: document.getElementById('pers_phone').value.trim(),
+      phone2: document.getElementById('pers_phone2').value.trim(),
+      city: document.getElementById('pers_city').value.trim(),
+      district: document.getElementById('pers_district').value.trim(),
+      address: document.getElementById('pers_address').value.trim(),
+      email: document.getElementById('pers_email').value.trim(),
+      id_number: document.getElementById('pers_id_number').value.trim(),
+      username: document.getElementById('pers_username').value.trim(),
+      password: document.getElementById('pers_password').value
+    };
+
+    const serviceEl = document.getElementById('pers_service_id');
+    if (serviceEl) {
+      data.service_id = serviceEl.value || null;
+    }
+
+    if (!data.full_name || !data.username || !data.password) {
+      errorEl.textContent = 'Ad, kullanıcı adı ve şifre alanları zorunludur';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    const result = await apiPost('/api/personnel', data);
+    if (result.success) {
+      closeModal();
+      renderPage('personnel');
+    } else {
+      errorEl.textContent = result.error || 'Bir hata oluştu';
+      errorEl.style.display = 'block';
+    }
+  });
+}
+
+// ===== ADMIN PAGE =====
+async function renderAdminPage(container) {
+  if (currentUser.role !== 'admin') {
+    container.innerHTML = '<div class="empty-state"><h3>Yetkiniz yok</h3></div>';
+    return;
+  }
+
+  const authServices = await apiGet('/api/admin/authorized-services-list');
+
+  container.innerHTML = `
+    <div class="page-header">
+      <h1>Admin Paneli</h1>
+    </div>
+
+    <div class="admin-grid">
+      <div class="admin-section">
+        <h3>Yetkili Servisler</h3>
+        <ul class="admin-list" id="adminServicesList">
+          ${authServices.length === 0 ? '<li class="admin-list-item" style="color:var(--text-muted);">Henüz yetkili servis yok</li>' : ''}
+          ${authServices.map(s => `
+            <li class="admin-list-item">
+              <span>${s.name}</span>
+              <button class="btn-danger btn-sm delete-auth-service-btn" data-id="${s.id}">Sil</button>
+            </li>
+          `).join('')}
+        </ul>
+        <div class="admin-add-form">
+          <input type="text" id="newAuthServiceName" placeholder="Yetkili servis adı">
+          <button class="btn-primary btn-sm" id="addAuthServiceBtn">Ekle</button>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <h3>Servis Atama</h3>
+        <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:1rem;">
+          Servisler sayfasından herhangi bir servis kaydını farklı bir yetkili servise atayabilirsiniz.
+          Durumu da yine servisler sayfasından değiştirebilirsiniz.
+        </p>
+        <button class="btn-primary" onclick="document.querySelector('[data-page=services]').click()">
+          Servislere Git
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Add authorized service
+  document.getElementById('addAuthServiceBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('newAuthServiceName');
+    const name = input.value.trim();
+    if (!name) return;
+
+    const result = await apiPost('/api/admin/authorized-services', { name });
+    if (result.success) {
+      renderAdminPage(container);
+    } else {
+      alert(result.error || 'Bir hata oluştu');
+    }
+  });
+
+  // Delete authorized service
+  document.querySelectorAll('.delete-auth-service-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Bu yetkili servisi silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/admin/authorized-services/${btn.dataset.id}`);
+        renderAdminPage(container);
+      }
+    });
+  });
+}

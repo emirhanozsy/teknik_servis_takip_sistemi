@@ -1,0 +1,41 @@
+giriş ekranı
+    müşteri girişi
+    admin girişi
+
+ana sayfa
+    servisler
+    müşteriler
+    personel
+    kasa
+
+servisler
+    yeni servis
+    servis listesi
+    servis detayı
+    servis düzenleme
+    servis silme
+
+müşteriler
+    yeni müşteri
+    müşteri listesi
+    müşteri detayı
+    müşteri düzenleme
+    müşteri silme
+
+personel
+    yeni personel
+    personel listesi
+    personel detayı
+    personel düzenleme
+    personel silme
+
+kasa
+    yeni kasa
+    kasa listesi
+    kasa detayı
+    kasa düzenleme
+    kasa silme
+
+kurallar
+    admin hesabı ile kullanıcı hesabı arasında yetki farkı olmalı
+    
