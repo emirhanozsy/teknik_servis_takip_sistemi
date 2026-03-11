@@ -89,6 +89,10 @@
     fetch('/api/auth/me').then(r => r.json()).then(data => {
       if (data.user) window.location.href = '/dashboard';
     }).catch(() => {});
+    // Theme Initialization
+    if (localStorage.getItem('theme') === 'light') {
+      document.body.classList.add('light-theme');
+    }
   </script>
 </body>
 </html>

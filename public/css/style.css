@@ -33,6 +33,28 @@
   --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* Light Theme Variables */
+.light-theme {
+  --bg-primary: #f8f9fc;
+  --bg-secondary: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --bg-card-hover: rgba(255, 255, 255, 1);
+  --bg-input: rgba(0, 0, 0, 0.04);
+  --bg-input-focus: rgba(0, 0, 0, 0.06);
+  --bg-modal: rgba(255, 255, 255, 0.98);
+  --text-primary: #1e1e2e;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --success-bg: rgba(74, 222, 128, 0.15);
+  --warning-bg: rgba(251, 191, 36, 0.15);
+  --danger-bg: rgba(248, 113, 113, 0.15);
+  --info-bg: rgba(56, 189, 248, 0.15);
+}
+
 /* ===== Reset & Base ===== */
 *, *::before, *::after {
   margin: 0;
@@ -351,6 +373,54 @@ select option {
   text-align: center;
 }
 
+/* ===== Responsive Mobile Header ===== */
+.mobile-header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 101;
+}
+
+.menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.menu-toggle:hover {
+  background: var(--bg-input-focus);
+  color: var(--accent);
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 99;
+  opacity: 0;
+  visibility: hidden;
+  transition: var(--transition);
+}
+
+.sidebar-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
 /* ===== Dashboard Layout ===== */
 .dashboard {
   display: flex;
@@ -376,6 +446,57 @@ select option {
 .sidebar-header {
   padding: 1.5rem;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-toggle:hover {
+  background: var(--bg-input-focus);
+  color: var(--accent);
+  border-color: var(--accent);
+  transform: rotate(15deg);
+}
+
+.theme-toggle svg {
+  position: absolute;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.moon-icon {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.sun-icon {
+  opacity: 0;
+  transform: scale(0) rotate(-90deg);
+}
+
+.light-theme .moon-icon {
+  opacity: 0;
+  transform: scale(0) rotate(90deg);
+}
+
+.light-theme .sun-icon {
+  opacity: 1;
+  transform: scale(1) rotate(0);
 }
 
 .sidebar-logo {
@@ -650,6 +771,10 @@ tbody td {
   visibility: visible;
 }
 
+.light-theme .modal-overlay {
+  background: rgba(0, 0, 0, 0.4);
+}
+
 .modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -851,28 +976,84 @@ tbody td {
   to { opacity: 1; }
 }
 
-/* ===== Responsive ===== */
+/* ===== Responsive Media Queries ===== */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 240px;
+  }
+  .main-content {
+    margin-left: 240px;
+  }
+}
+
 @media (max-width: 768px) {
+  .dashboard {
+    flex-direction: column;
+  }
+
+  .mobile-header {
+    display: flex;
+  }
+
   .sidebar {
     transform: translateX(-100%);
     width: 280px;
+    box-shadow: 20px 0 50px rgba(0,0,0,0.3);
   }
 
-  .sidebar.open {
+  .sidebar.active {
     transform: translateX(0);
   }
 
   .main-content {
     margin-left: 0;
+    padding: 1.5rem;
   }
 
   .form-grid {
     grid-template-columns: 1fr;
   }
 
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .search-bar {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .table-container {
+    overflow-x: auto;
+  }
+
   .modal {
     width: 95%;
-    max-height: 90vh;
+    padding: 1rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    padding: 1rem;
+  }
+
+  .login-card {
+    padding: 1.5rem;
+  }
+
+  .btn-primary, .btn-secondary {
+    padding: 0.6rem 1rem;
+    font-size: 0.8rem;
+  }
+
+  .sidebar-logo h2 {
+    font-size: 0.9rem;
   }
 }
 

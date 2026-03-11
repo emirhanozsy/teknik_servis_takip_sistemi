@@ -56,6 +56,41 @@ function initApp() {
     window.location.href = '/';
   });
 
+  // Theme Toggle
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  if (savedTheme === 'light') document.body.classList.add('light-theme');
+
+  document.querySelectorAll('.theme-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.body.classList.toggle('light-theme');
+      const newTheme = document.body.classList.contains('light-theme') ? 'light' : 'dark';
+      localStorage.setItem('theme', newTheme);
+    });
+  });
+
+  // Mobile Menu Toggle
+  const menuToggle = document.getElementById('menuToggle');
+  const sidebar = document.getElementById('sidebar');
+  const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+  const toggleMobileMenu = () => {
+    sidebar.classList.toggle('active');
+    sidebarOverlay.classList.toggle('active');
+  };
+
+  menuToggle?.addEventListener('click', toggleMobileMenu);
+  sidebarOverlay?.addEventListener('click', toggleMobileMenu);
+
+  // Close sidebar on nav item click (mobile)
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      if (window.innerWidth <= 768) {
+        sidebar.classList.remove('active');
+        sidebarOverlay.classList.remove('active');
+      }
+    });
+  });
+
   // Modal close on overlay click
   document.getElementById('modalOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'modalOverlay') closeModal();
