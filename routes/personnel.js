@@ -65,25 +65,68 @@ router.post('/', requireAuth, (req, res) => {
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
-// Delete personnel
-router.delete('/:id', requireAuth, (req, res) => {
+// Update personnel (admin only)
+router.put('/:id', requireAuth, (req, res) => {
   const user = req.session.user;
-  const person = db.prepare('SELECT * FROM personnel WHERE id = ?').get(req.params.id);
 
+  if (user.role !== 'admin') {
+    return res.status(403).json({ error: 'Bu işlem için admin yetkisi gerekiyor' });
+  }
+
+  const person = db.prepare('SELECT * FROM personnel WHERE id = ?').get(req.params.id);
   if (!person) {
     return res.status(404).json({ error: 'Personel bulunamadı' });
   }
 
-  if (person.role === 'admin') {
-    return res.status(403).json({ error: 'Admin hesabı silinemez' });
+  const {
+    full_name, start_date, position, phone, phone2,
+    city, district, address, email, id_number,
+    username, password, role, service_id
+  } = req.body;
+
+  // Check username uniqueness if changed
+  if (username && username !== person.username) {
+    const existing = db.prepare('SELECT id FROM personnel WHERE username = ?').get(username);
+    if (existing) {
+      return res.status(400).json({ error: 'Bu kullanıcı adı zaten kullanılıyor' });
+    }
   }
 
-  if (user.role !== 'admin' && person.service_id !== user.service_id) {
-    return res.status(403).json({ error: 'Yetkiniz yok' });
+  let query = `
+    UPDATE personnel SET 
+      full_name = ?, start_date = ?, position = ?, phone = ?, phone2 = ?,
+      city = ?, district = ?, address = ?, email = ?, id_number = ?,
+      username = ?, role = ?, service_id = ?
+  `;
+  const params = [
+    full_name || person.full_name,
+    start_date !== undefined ? start_date : person.start_date,
+    position !== undefined ? position : person.position,
+    phone !== undefined ? phone : person.phone,
+    phone2 !== undefined ? phone2 : person.phone2,
+    city !== undefined ? city : person.city,
+    district !== undefined ? district : person.district,
+    address !== undefined ? address : person.address,
+    email !== undefined ? email : person.email,
+    id_number !== undefined ? id_number : person.id_number,
+    username || person.username,
+    role || person.role,
+    service_id !== undefined ? service_id : person.service_id
+  ];
+
+  if (password) {
+    query += `, password_hash = ?`;
+    params.push(bcrypt.hashSync(password, 10));
   }
 
-  db.prepare('DELETE FROM personnel WHERE id = ?').run(req.params.id);
+  query += ` WHERE id = ?`;
+  params.push(req.params.id);
+
+  db.prepare(query).run(...params);
+
   res.json({ success: true });
 });
+
+// Delete personnel
 
 module.exports = router;

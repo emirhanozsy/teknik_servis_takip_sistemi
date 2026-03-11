@@ -69,7 +69,7 @@ router.post('/', requireAuth, (req, res) => {
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
-// Update service (status, assignment, etc.)
+// Update service (status, details, etc.)
 router.put('/:id', requireAuth, (req, res) => {
   const user = req.session.user;
   const serviceRecord = db.prepare('SELECT * FROM services WHERE id = ?').get(req.params.id);
@@ -83,15 +83,40 @@ router.put('/:id', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Yetkiniz yok' });
   }
 
-  const { status, service_id: newServiceId } = req.body;
+  if (user.role === 'admin') {
+    // Admin can update everything
+    const {
+      service_id, device_brand, device_type, device_model,
+      device_fault, operator_note, warranty_period,
+      availability_date, time_start, time_end, status
+    } = req.body;
 
-  if (status) {
-    db.prepare('UPDATE services SET status = ? WHERE id = ?').run(status, req.params.id);
-  }
-
-  // Only admin can reassign service to different authorized service
-  if (user.role === 'admin' && newServiceId) {
-    db.prepare('UPDATE services SET service_id = ? WHERE id = ?').run(newServiceId, req.params.id);
+    db.prepare(`
+      UPDATE services SET 
+        service_id = ?, device_brand = ?, device_type = ?, device_model = ?,
+        device_fault = ?, operator_note = ?, warranty_period = ?, 
+        availability_date = ?, time_start = ?, time_end = ?, status = ?
+      WHERE id = ?
+    `).run(
+      service_id || serviceRecord.service_id,
+      device_brand !== undefined ? device_brand : serviceRecord.device_brand,
+      device_type !== undefined ? device_type : serviceRecord.device_type,
+      device_model !== undefined ? device_model : serviceRecord.device_model,
+      device_fault !== undefined ? device_fault : serviceRecord.device_fault,
+      operator_note !== undefined ? operator_note : serviceRecord.operator_note,
+      warranty_period !== undefined ? warranty_period : serviceRecord.warranty_period,
+      availability_date !== undefined ? availability_date : serviceRecord.availability_date,
+      time_start !== undefined ? time_start : serviceRecord.time_start,
+      time_end !== undefined ? time_end : serviceRecord.time_end,
+      status || serviceRecord.status,
+      req.params.id
+    );
+  } else {
+    // Personnel can only update status
+    const { status } = req.body;
+    if (status) {
+      db.prepare('UPDATE services SET status = ? WHERE id = ?').run(status, req.params.id);
+    }
   }
 
   res.json({ success: true });

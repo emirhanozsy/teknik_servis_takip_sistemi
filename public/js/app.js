@@ -217,6 +217,12 @@ async function renderServicesPage(container) {
                       <option value="Tamamlandı" ${s.status === 'Tamamlandı' ? 'selected' : ''}>Tamamlandı</option>
                       <option value="İptal" ${s.status === 'İptal' ? 'selected' : ''}>İptal</option>
                     </select>
+                    <button class="btn-icon edit-service-btn" data-id="${s.id}" title="Düzenle">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
                     <button class="btn-icon delete-service-btn" data-id="${s.id}" title="Sil">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
@@ -238,6 +244,10 @@ async function renderServicesPage(container) {
       await apiPut(`/api/services/${e.target.dataset.id}`, { status: e.target.value });
       renderServicesPage(container);
     });
+  });
+
+  document.querySelectorAll('.edit-service-btn').forEach(btn => {
+    btn.addEventListener('click', () => openEditServiceModal(btn.dataset.id, services));
   });
 
   document.querySelectorAll('.delete-service-btn').forEach(btn => {
@@ -473,6 +483,134 @@ async function saveNewService() {
   }
 }
 
+// ===== Edit Service Modal =====
+async function openEditServiceModal(serviceId, services) {
+  const s = services.find(item => item.id == serviceId);
+  if (!s) return;
+
+  const isAdmin = currentUser.role === 'admin';
+  let servicesListHtml = '';
+  
+  if (isAdmin) {
+    const authServices = await apiGet('/api/admin/authorized-services-list');
+    servicesListHtml = `
+      <div class="form-group">
+        <label>Yetkili Servis</label>
+        <select id="edit_svc_assigned_service_id">
+          <option value="">Seçiniz</option>
+          ${authServices.map(as => `<option value="${as.id}" ${as.id === s.service_id ? 'selected' : ''}>${as.name}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
+
+  openModal(`
+    <div class="modal-header">
+      <h2>Servis Kaydını Düzenle</h2>
+      <button class="btn-icon" onclick="closeModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-section-title">Genel Bilgiler</div>
+        ${servicesListHtml}
+        <div class="form-group">
+          <label>Durum</label>
+          <select id="edit_svc_status">
+            <option value="Beklemede" ${s.status === 'Beklemede' ? 'selected' : ''}>Beklemede</option>
+            <option value="Devam Ediyor" ${s.status === 'Devam Ediyor' ? 'selected' : ''}>Devam Ediyor</option>
+            <option value="Tamamlandı" ${s.status === 'Tamamlandı' ? 'selected' : ''}>Tamamlandı</option>
+            <option value="İptal" ${s.status === 'İptal' ? 'selected' : ''}>İptal</option>
+          </select>
+        </div>
+
+        <div class="form-section-title">Cihaz Bilgileri</div>
+        <div class="form-group">
+          <label>Cihaz Markası</label>
+          <input type="text" id="edit_svc_device_brand" value="${s.device_brand || ''}" ${!isAdmin ? 'readonly' : ''}>
+        </div>
+        <div class="form-group">
+          <label>Cihaz Türü</label>
+          <input type="text" id="edit_svc_device_type" value="${s.device_type || ''}" ${!isAdmin ? 'readonly' : ''}>
+        </div>
+        <div class="form-group">
+          <label>Cihaz Modeli</label>
+          <input type="text" id="edit_svc_device_model" value="${s.device_model || ''}" ${!isAdmin ? 'readonly' : ''}>
+        </div>
+        <div class="form-group">
+          <label>Garanti Süresi</label>
+          <input type="text" id="edit_svc_warranty_period" value="${s.warranty_period || ''}" ${!isAdmin ? 'readonly' : ''}>
+        </div>
+        <div class="form-group full-width">
+          <label>Cihaz Arızası</label>
+          <textarea id="edit_svc_device_fault" ${!isAdmin ? 'readonly' : ''}>${s.device_fault || ''}</textarea>
+        </div>
+        
+        <div class="form-section-title">Randevu Bilgileri</div>
+        <div class="form-group">
+          <label>Müsait Olma Tarihi</label>
+          <input type="date" id="edit_svc_availability_date" value="${s.availability_date || ''}" ${!isAdmin ? 'readonly' : ''}>
+        </div>
+        <div class="form-group">
+          <label>Saat Başlangıç</label>
+          <input type="time" id="edit_svc_time_start" value="${s.time_start || ''}" ${!isAdmin ? 'readonly' : ''}>
+        </div>
+        <div class="form-group">
+          <label>Saat Bitiş</label>
+          <input type="time" id="edit_svc_time_end" value="${s.time_end || ''}" ${!isAdmin ? 'readonly' : ''}>
+        </div>
+
+        <div class="form-section-title">Notlar</div>
+        <div class="form-group full-width">
+          <label>Operatör Notu</label>
+          <textarea id="edit_svc_operator_note" ${!isAdmin ? 'readonly' : ''}>${s.operator_note || ''}</textarea>
+        </div>
+      </div>
+      <div id="edit_svc_error" class="error-message" style="display:none;margin-top:1rem;"></div>
+      ${!isAdmin ? '<p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem;">Not: Personel yetkisiyle sadece durum bilgisini değiştirebilirsiniz.</p>' : ''}
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">İptal</button>
+      <button class="btn-primary" id="saveEditServiceBtn">Kaydet</button>
+    </div>
+  `);
+
+  document.getElementById('saveEditServiceBtn').addEventListener('click', async () => {
+    const errorEl = document.getElementById('edit_svc_error');
+    errorEl.style.display = 'none';
+
+    let data = {
+      status: document.getElementById('edit_svc_status').value
+    };
+
+    if (isAdmin) {
+      data = {
+        ...data,
+        service_id: document.getElementById('edit_svc_assigned_service_id').value || null,
+        device_brand: document.getElementById('edit_svc_device_brand').value.trim(),
+        device_type: document.getElementById('edit_svc_device_type').value.trim(),
+        device_model: document.getElementById('edit_svc_device_model').value.trim(),
+        device_fault: document.getElementById('edit_svc_device_fault').value.trim(),
+        operator_note: document.getElementById('edit_svc_operator_note').value.trim(),
+        warranty_period: document.getElementById('edit_svc_warranty_period').value.trim(),
+        availability_date: document.getElementById('edit_svc_availability_date').value,
+        time_start: document.getElementById('edit_svc_time_start').value,
+        time_end: document.getElementById('edit_svc_time_end').value
+      };
+    }
+
+    const result = await apiPut(`/api/services/${serviceId}`, data);
+    if (result.success) {
+      closeModal();
+      renderPage('services');
+    } else {
+      errorEl.textContent = result.error || 'Bir hata oluştu';
+      errorEl.style.display = 'block';
+    }
+  });
+}
+
 // ===== CUSTOMERS PAGE =====
 async function renderCustomersPage(container) {
   const customers = await apiGet('/api/customers');
@@ -700,9 +838,21 @@ async function renderPersonnelPage(container) {
                 <td>${p.username}</td>
                 ${currentUser.role === 'admin' ? `<td>${p.authorized_service_name || '-'}</td>` : ''}
                 <td>
-                  ${p.role !== 'admin' ? `
-                    <button class="btn-danger btn-sm delete-personnel-btn" data-id="${p.id}">Sil</button>
-                  ` : '<span class="badge badge-done">Admin</span>'}
+                  <div style="display:flex;gap:0.25rem;">
+                    ${currentUser.role === 'admin' ? `
+                      <button class="btn-icon edit-personnel-btn" data-id="${p.id}" title="Düzenle">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </button>
+                    ` : ''}
+                    ${p.role !== 'admin' ? `
+                      <button class="btn-icon delete-personnel-btn" data-id="${p.id}" title="Sil">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      </button>
+                    ` : '<span class="badge badge-done" style="font-size:0.7rem;">Admin</span>'}
+                  </div>
                 </td>
               </tr>
             `).join('')}
@@ -713,6 +863,10 @@ async function renderPersonnelPage(container) {
   `;
 
   document.getElementById('newPersonnelBtn')?.addEventListener('click', openNewPersonnelModal);
+
+  document.querySelectorAll('.edit-personnel-btn').forEach(btn => {
+    btn.addEventListener('click', () => openEditPersonnelModal(btn.dataset.id, personnel));
+  });
 
   document.querySelectorAll('.delete-personnel-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -849,6 +1003,135 @@ async function openNewPersonnelModal() {
     }
   });
 }
+
+// ===== Edit Personnel Modal =====
+async function openEditPersonnelModal(personnelId, personnelList) {
+  const p = personnelList.find(item => item.id == personnelId);
+  if (!p) return;
+
+  const authServices = await apiGet('/api/admin/authorized-services-list');
+
+  openModal(`
+    <div class="modal-header">
+      <h2>Personel Düzenle</h2>
+      <button class="btn-icon" onclick="closeModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-section-title">Kişisel Bilgiler</div>
+        <div class="form-group">
+          <label>Yetkili Servis *</label>
+          <select id="edit_pers_service_id" required>
+            <option value="">Seçiniz</option>
+            ${authServices.map(s => `<option value="${s.id}" ${s.id === p.service_id ? 'selected' : ''}>${s.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Ad Soyad *</label>
+          <input type="text" id="edit_pers_full_name" value="${p.full_name || ''}" required>
+        </div>
+        <div class="form-group">
+          <label>Pozisyon</label>
+          <input type="text" id="edit_pers_position" value="${p.position || ''}">
+        </div>
+        <div class="form-group">
+          <label>Başlama Tarihi</label>
+          <input type="date" id="edit_pers_start_date" value="${p.start_date || ''}">
+        </div>
+        <div class="form-group">
+          <label>Telefon</label>
+          <input type="tel" id="edit_pers_phone" value="${p.phone || ''}">
+        </div>
+        <div class="form-group">
+          <label>Telefon 2</label>
+          <input type="tel" id="edit_pers_phone2" value="${p.phone2 || ''}">
+        </div>
+        <div class="form-group">
+          <label>İl</label>
+          <input type="text" id="edit_pers_city" value="${p.city || ''}">
+        </div>
+        <div class="form-group">
+          <label>İlçe</label>
+          <input type="text" id="edit_pers_district" value="${p.district || ''}">
+        </div>
+        <div class="form-group full-width">
+          <label>Adres</label>
+          <textarea id="edit_pers_address">${p.address || ''}</textarea>
+        </div>
+        <div class="form-group">
+          <label>E-posta</label>
+          <input type="email" id="edit_pers_email" value="${p.email || ''}">
+        </div>
+        <div class="form-group">
+          <label>Kimlik No</label>
+          <input type="text" id="edit_pers_id_number" value="${p.id_number || ''}">
+        </div>
+
+        <div class="form-section-title">Giriş Bilgileri ve Yetki</div>
+        <div class="form-group">
+          <label>Kullanıcı Adı *</label>
+          <input type="text" id="edit_pers_username" value="${p.username || ''}" required>
+        </div>
+        <div class="form-group">
+          <label>Şifre (Değiştirmek istemiyorsanız boş bırakın)</label>
+          <input type="password" id="edit_pers_password" placeholder="Yeni şifre">
+        </div>
+        <div class="form-group">
+          <label>Yetki / Rol</label>
+          <select id="edit_pers_role">
+            <option value="user" ${p.role === 'user' ? 'selected' : ''}>Personel</option>
+            <option value="admin" ${p.role === 'admin' ? 'selected' : ''}>Admin</option>
+          </select>
+        </div>
+      </div>
+      <div id="edit_pers_error" class="error-message" style="display:none;margin-top:1rem;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">İptal</button>
+      <button class="btn-primary" id="saveEditPersonnelBtn">Kaydet</button>
+    </div>
+  `);
+
+  document.getElementById('saveEditPersonnelBtn').addEventListener('click', async () => {
+    const errorEl = document.getElementById('edit_pers_error');
+    errorEl.style.display = 'none';
+
+    const data = {
+      service_id: document.getElementById('edit_pers_service_id').value || null,
+      full_name: document.getElementById('edit_pers_full_name').value.trim(),
+      position: document.getElementById('edit_pers_position').value.trim(),
+      start_date: document.getElementById('edit_pers_start_date').value,
+      phone: document.getElementById('edit_pers_phone').value.trim(),
+      phone2: document.getElementById('edit_pers_phone2').value.trim(),
+      city: document.getElementById('edit_pers_city').value.trim(),
+      district: document.getElementById('edit_pers_district').value.trim(),
+      address: document.getElementById('edit_pers_address').value.trim(),
+      email: document.getElementById('edit_pers_email').value.trim(),
+      id_number: document.getElementById('edit_pers_id_number').value.trim(),
+      username: document.getElementById('edit_pers_username').value.trim(),
+      password: document.getElementById('edit_pers_password').value,
+      role: document.getElementById('edit_pers_role').value
+    };
+
+    if (!data.full_name || !data.username) {
+      errorEl.textContent = 'Ad ve kullanıcı adı alanları zorunludur';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    const result = await apiPut(`/api/personnel/${personnelId}`, data);
+    if (result.success) {
+      closeModal();
+      renderPage('personnel');
+    } else {
+      errorEl.textContent = result.error || 'Bir hata oluştu';
+      errorEl.style.display = 'block';
+    }
+  });
+}
+
 
 // ===== ADMIN PAGE =====
 async function renderAdminPage(container) {
