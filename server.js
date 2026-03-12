@@ -24,8 +24,8 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/services', require('./routes/services'));
 app.use('/api/customers', require('./routes/customers'));
 app.use('/api/personnel', require('./routes/personnel'));
-app.use('/api/admin', require('./routes/admin'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/settings', require('./routes/settings'));
 
 // Serve login page
 app.get('/', (req, res) => {

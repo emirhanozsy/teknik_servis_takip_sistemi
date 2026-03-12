@@ -67,10 +67,52 @@ db.exec(`
     time_start TEXT,
     time_end TEXT,
     status TEXT DEFAULT 'Beklemede',
+    service_source TEXT,
+    service_vehicle TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (service_id) REFERENCES authorized_services(id) ON DELETE SET NULL,
     FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
     FOREIGN KEY (personnel_id) REFERENCES personnel(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS device_brands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    service_id INTEGER,
+    name TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (service_id) REFERENCES authorized_services(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS device_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    service_id INTEGER,
+    name TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (service_id) REFERENCES authorized_services(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS service_stages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    service_id INTEGER,
+    name TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (service_id) REFERENCES authorized_services(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS service_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    service_id INTEGER,
+    name TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (service_id) REFERENCES authorized_services(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS service_vehicles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    service_id INTEGER,
+    name TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (service_id) REFERENCES authorized_services(id) ON DELETE CASCADE
   );
 `);
 

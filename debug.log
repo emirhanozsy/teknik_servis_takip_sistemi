@@ -3,3 +3,7 @@
 Body: {"full_name":"hırt hurt","position":"","start_date":"","phone":"","phone2":"","city":"","district":"","address":"","email":"","id_number":"","username":"hırto","password":"123","role":"personel"}
 File: {"fieldname":"profile_picture","originalname":"99418abc-53fb-453e-bee0-c763c1544f6c-removebg-preview.png","encoding":"7bit","mimetype":"image/png","destination":"public/uploads/personnel","filename":"personnel-1773303632937-573565195.png","path":"public\\uploads\\personnel\\personnel-1773303632937-573565195.png","size":159827}
 
+[2026-03-12T11:56:47.706Z] personnel.js loaded
+[2026-03-12T12:02:50.273Z] personnel.js loaded
+[2026-03-12T12:07:34.680Z] personnel.js loaded
+[2026-03-12T12:11:19.225Z] personnel.js loaded

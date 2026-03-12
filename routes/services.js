@@ -40,7 +40,7 @@ router.post('/', requireAuth, (req, res) => {
   const {
     customer_id, device_brand, device_type, device_model,
     device_fault, operator_note, warranty_period,
-    availability_date, time_start, time_end,
+    availability_date, time_start, time_end, status, service_source, service_vehicle,
     // customer fields for new customer
     customer_type, customer_name, phone, phone2,
     city, district, address, id_number
@@ -61,10 +61,10 @@ router.post('/', requireAuth, (req, res) => {
 
   const result = db.prepare(`
     INSERT INTO services (service_id, customer_id, personnel_id, device_brand, device_type, device_model,
-                          device_fault, operator_note, warranty_period, availability_date, time_start, time_end)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          device_fault, operator_note, warranty_period, availability_date, time_start, time_end, status, service_source, service_vehicle)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(serviceId, customerId, user.id, device_brand, device_type, device_model,
-         device_fault, operator_note, warranty_period, availability_date, time_start, time_end);
+         device_fault, operator_note, warranty_period, availability_date, time_start, time_end, status || 'Beklemede', service_source, service_vehicle);
 
   res.json({ success: true, id: result.lastInsertRowid });
 });
@@ -96,7 +96,7 @@ router.put('/:id', requireAuth, (req, res) => {
       UPDATE services SET 
         service_id = ?, device_brand = ?, device_type = ?, device_model = ?,
         device_fault = ?, operator_note = ?, warranty_period = ?, 
-        availability_date = ?, time_start = ?, time_end = ?, status = ?
+        availability_date = ?, time_start = ?, time_end = ?, status = ?, service_source = ?, service_vehicle = ?
       WHERE id = ?
     `).run(
       service_id || serviceRecord.service_id,
@@ -110,6 +110,8 @@ router.put('/:id', requireAuth, (req, res) => {
       time_start !== undefined ? time_start : serviceRecord.time_start,
       time_end !== undefined ? time_end : serviceRecord.time_end,
       status || serviceRecord.status,
+      service_source !== undefined ? service_source : serviceRecord.service_source,
+      service_vehicle !== undefined ? service_vehicle : serviceRecord.service_vehicle,
       req.params.id
     );
   } else if (user.role === 'yönetici') {
@@ -117,14 +119,14 @@ router.put('/:id', requireAuth, (req, res) => {
     const {
       device_brand, device_type, device_model,
       device_fault, operator_note, warranty_period,
-      availability_date, time_start, time_end, status
+      availability_date, time_start, time_end, status, service_source
     } = req.body;
 
     db.prepare(`
       UPDATE services SET 
         device_brand = ?, device_type = ?, device_model = ?,
         device_fault = ?, operator_note = ?, warranty_period = ?, 
-        availability_date = ?, time_start = ?, time_end = ?, status = ?
+        availability_date = ?, time_start = ?, time_end = ?, status = ?, service_source = ?, service_vehicle = ?
       WHERE id = ?
     `).run(
       device_brand !== undefined ? device_brand : serviceRecord.device_brand,
@@ -137,6 +139,8 @@ router.put('/:id', requireAuth, (req, res) => {
       time_start !== undefined ? time_start : serviceRecord.time_start,
       time_end !== undefined ? time_end : serviceRecord.time_end,
       status || serviceRecord.status,
+      service_source !== undefined ? service_source : serviceRecord.service_source,
+      service_vehicle !== undefined ? service_vehicle : serviceRecord.service_vehicle,
       req.params.id
     );
   } else {

@@ -36,9 +36,10 @@ function initApp() {
     avatarEl.textContent = currentUser.full_name.charAt(0).toUpperCase();
   }
 
-  // Hide Personnel for staff
+  // Hide Personnel and Settings for staff
   if (currentUser.role === 'personel') {
     document.querySelector('.nav-item[data-page="personnel"]')?.style.setProperty('display', 'none');
+    document.querySelector('.nav-item[data-page="settings"]')?.style.setProperty('display', 'none');
   }
 
   // Admin class
@@ -115,7 +116,7 @@ function renderPage(page) {
     case 'services': renderServicesPage(main); break;
     case 'customers': renderCustomersPage(main); break;
     case 'personnel': renderPersonnelPage(main); break;
-    case 'admin': renderAdminPage(main); break;
+    case 'settings': renderSettingsPage(main); break;
   }
 }
 
@@ -241,9 +242,12 @@ function getStatusBadge(status) {
     'Beklemede': 'badge-waiting',
     'Devam Ediyor': 'badge-progress',
     'Tamamlandı': 'badge-done',
-    'İptal': 'badge-cancelled'
+    'İptal': 'badge-cancelled',
+    'İade Edildi': 'badge-cancelled'
   };
-  return `<span class="badge ${map[status] || 'badge-waiting'}">${status || 'Beklemede'}</span>`;
+  // Normalize key for map
+  const key = Object.keys(map).find(k => k.toLowerCase() === (status || '').toLowerCase());
+  return `<span class="badge ${map[key] || 'badge-default'}">${status || 'Beklemede'}</span>`;
 }
 
 function openModal(html) {
@@ -296,9 +300,9 @@ async function apiDelete(url) {
 
 // ===== SERVICES PAGE =====
 async function renderServicesPage(container) {
-  const [services, authServices] = await Promise.all([
+  const [services, stages] = await Promise.all([
     apiGet('/api/services'),
-    currentUser.role === 'admin' ? apiGet('/api/admin/authorized-services-list') : Promise.resolve([])
+    apiGet('/api/settings/stages')
   ]);
 
   const totalCount = services.length;
@@ -307,16 +311,7 @@ async function renderServicesPage(container) {
   const doneCount = services.filter(s => s.status === 'Tamamlandı').length;
 
   let authServiceFilterHtml = '';
-  if (currentUser.role === 'admin') {
-    authServiceFilterHtml = `
-      <div class="filter-group">
-        <select id="companyFilter" class="filter-select">
-          <option value="">Tüm Firmalar</option>
-          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-        </select>
-      </div>
-    `;
-  }
+  // Removed admin-only authorized services filter as per requested refinement
 
   container.innerHTML = `
     <div class="page-header">
@@ -337,7 +332,7 @@ async function renderServicesPage(container) {
             <option value="İptal">İptal</option>
           </select>
         </div>
-        ${authServiceFilterHtml}
+        
         <button class="btn-primary" id="newServiceBtn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -396,30 +391,33 @@ async function renderServicesPage(container) {
               <th>Müşteri</th>
               <th>Cihaz</th>
               <th>Arıza</th>
+              <th>Kaynak</th>
               <th>Durum</th>
-              <th>Servis Sahibi</th>
-              ${currentUser.role === 'admin' ? '<th>Yetkili Servis</th>' : ''}
               <th>İşlem</th>
             </tr>
           </thead>
           <tbody id="servicesTableBody">
             ${services.map(s => `
-              <tr data-id="${s.id}" data-customer="${(s.customer_name || '').toLowerCase()}" data-status="${s.status}" data-company="${s.service_id || ''}">
+              <tr data-id="${s.id}" data-customer="${(s.customer_name || '').toLowerCase()}" data-status="${s.status}">
                 <td><small>#${s.id}</small></td>
                 <td>${formatDate(s.created_at)}</td>
                 <td>${s.customer_name || '-'}</td>
                 <td>${[s.device_brand, s.device_model].filter(Boolean).join(' ') || '-'}</td>
                 <td>${s.device_fault || '-'}</td>
+                <td><span class="badge badge-outline">${s.service_source || '-'}</span></td>
                 <td>${getStatusBadge(s.status)}</td>
-                <td>${s.personnel_name || '-'}</td>
-                ${currentUser.role === 'admin' ? `<td>${s.authorized_service_name || '-'}</td>` : ''}
                 <td>
                   <div style="display:flex;gap:0.25rem;">
                     <select class="status-select" data-id="${s.id}" style="padding:0.3rem;font-size:0.8rem;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);">
-                      <option value="Beklemede" ${s.status === 'Beklemede' ? 'selected' : ''}>Beklemede</option>
-                      <option value="Devam Ediyor" ${s.status === 'Devam Ediyor' ? 'selected' : ''}>Devam Ediyor</option>
-                      <option value="Tamamlandı" ${s.status === 'Tamamlandı' ? 'selected' : ''}>Tamamlandı</option>
-                      <option value="İptal" ${s.status === 'İptal' ? 'selected' : ''}>İptal</option>
+                      ${stages.length > 0 
+                        ? stages.map(st => `<option value="${st.name}" ${s.status === st.name ? 'selected' : ''}>${st.name}</option>`).join('')
+                        : `
+                          <option value="Beklemede" ${s.status === 'Beklemede' ? 'selected' : ''}>Beklemede</option>
+                          <option value="Devam Ediyor" ${s.status === 'Devam Ediyor' ? 'selected' : ''}>Devam Ediyor</option>
+                          <option value="Tamamlandı" ${s.status === 'Tamamlandı' ? 'selected' : ''}>Tamamlandı</option>
+                          <option value="İptal" ${s.status === 'İptal' ? 'selected' : ''}>İptal</option>
+                        `
+                      }
                     </select>
                     <button class="btn-icon edit-service-btn" data-id="${s.id}" title="Düzenle">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2">
@@ -446,25 +444,22 @@ async function renderServicesPage(container) {
   const filterServices = () => {
     const searchTerm = document.getElementById('serviceSearchInput').value.toLowerCase().trim();
     const statusFilter = document.getElementById('statusFilter').value;
-    const companyFilter = document.getElementById('companyFilter')?.value || '';
     
     document.querySelectorAll('#servicesTableBody tr').forEach(tr => {
       const id = tr.dataset.id;
       const customer = tr.dataset.customer;
       const status = tr.dataset.status;
-      const company = tr.dataset.company;
       
       const matchesSearch = !searchTerm || id.includes(searchTerm) || customer.includes(searchTerm) || `#${id}`.includes(searchTerm);
       const matchesStatus = !statusFilter || status === statusFilter;
-      const matchesCompany = !companyFilter || company === companyFilter;
       
-      tr.style.display = (matchesSearch && matchesStatus && matchesCompany) ? '' : 'none';
+      tr.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
     });
   };
 
   document.getElementById('serviceSearchInput')?.addEventListener('input', filterServices);
   document.getElementById('statusFilter')?.addEventListener('change', filterServices);
-  document.getElementById('companyFilter')?.addEventListener('change', filterServices);
+  
 
   // Event listeners
   document.getElementById('newServiceBtn')?.addEventListener('click', openNewServiceModal);
@@ -492,19 +487,14 @@ async function renderServicesPage(container) {
 
 // ===== New Service Modal =====
 async function openNewServiceModal() {
-  let servicesListHtml = '';
-  if (currentUser.role === 'admin') {
-    const authServices = await apiGet('/api/admin/authorized-services-list');
-    servicesListHtml = `
-      <div class="form-group">
-        <label>Yetkili Servis</label>
-        <select id="svc_assigned_service_id">
-          <option value="">Seçiniz</option>
-          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-        </select>
-      </div>
-    `;
-  }
+  const [brands, types, stages, sources, vehicles] = await Promise.all([
+    apiGet('/api/settings/brands'),
+    apiGet('/api/settings/types'),
+    apiGet('/api/settings/stages'),
+    apiGet('/api/settings/sources'),
+    apiGet('/api/settings/vehicles')
+  ]);
+  
 
   openModal(`
     <div class="modal-header">
@@ -516,7 +506,13 @@ async function openNewServiceModal() {
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-section-title">Müşteri Bilgileri</div>
-        ${servicesListHtml}
+        <div class="form-group">
+          <label>Servis Kaynağı</label>
+          <select id="svc_source">
+            <option value="">Seçiniz...</option>
+            ${sources.map(src => `<option value="${src.name}">${src.name}</option>`).join('')}
+          </select>
+        </div>
         <div class="form-group">
           <label>Müşteri Tipi</label>
           <select id="svc_customer_type">
@@ -570,11 +566,17 @@ async function openNewServiceModal() {
         <div class="form-section-title">Cihaz Bilgileri</div>
         <div class="form-group">
           <label>Cihaz Markası</label>
-          <input type="text" id="svc_device_brand" placeholder="Marka">
+          <select id="svc_device_brand">
+            <option value="">Seçiniz...</option>
+            ${brands.map(b => `<option value="${b.name}">${b.name}</option>`).join('')}
+          </select>
         </div>
         <div class="form-group">
           <label>Cihaz Türü</label>
-          <input type="text" id="svc_device_type" placeholder="Tür (ör: Laptop, Telefon)">
+          <select id="svc_device_type">
+            <option value="">Seçiniz...</option>
+            ${types.map(t => `<option value="${t.name}">${t.name}</option>`).join('')}
+          </select>
         </div>
         <div class="form-group">
           <label>Cihaz Modeli</label>
@@ -587,6 +589,27 @@ async function openNewServiceModal() {
         <div class="form-group full-width">
           <label>Cihaz Arızası</label>
           <textarea id="svc_device_fault" placeholder="Arıza detaylarını yazın"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Durum</label>
+          <select id="svc_status">
+            ${stages.length > 0 
+              ? stages.map(st => `<option value="${st.name}">${st.name}</option>`).join('')
+              : `
+                <option value="Beklemede">Beklemede</option>
+                <option value="Devam Ediyor">Devam Ediyor</option>
+                <option value="Tamamlandı">Tamamlandı</option>
+                <option value="İptal">İptal</option>
+              `
+            }
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Servis Aracı</label>
+          <select id="svc_vehicle">
+            <option value="">Seçiniz...</option>
+            ${vehicles.map(v => `<option value="${v.name}">${v.name}</option>`).join('')}
+          </select>
         </div>
         <div class="form-group full-width">
           <label>Operatör Notu</label>
@@ -688,14 +711,12 @@ async function saveNewService() {
     device_model: document.getElementById('svc_device_model').value.trim(),
     device_fault: document.getElementById('svc_device_fault').value.trim(),
     operator_note: document.getElementById('svc_operator_note').value.trim(),
-    warranty_period: document.getElementById('svc_warranty_period').value.trim()
+    warranty_period: document.getElementById('svc_warranty_period').value.trim(),
+    status: document.getElementById('svc_status').value,
+    service_source: document.getElementById('svc_source').value,
+    service_vehicle: document.getElementById('svc_vehicle').value
   };
 
-  // Admin: assigned service
-  const assignedEl = document.getElementById('svc_assigned_service_id');
-  if (assignedEl) {
-    data.assigned_service_id = assignedEl.value || null;
-  }
 
   if (!data.customer_name) {
     errorEl.textContent = 'Müşteri adı gereklidir';
@@ -718,25 +739,20 @@ async function openEditServiceModal(serviceId, services) {
   const s = services.find(item => item.id == serviceId);
   if (!s) return;
 
+  const [brands, types, stages, sources, vehicles] = await Promise.all([
+    apiGet('/api/settings/brands'),
+    apiGet('/api/settings/types'),
+    apiGet('/api/settings/stages'),
+    apiGet('/api/settings/sources'),
+    apiGet('/api/settings/vehicles')
+  ]);
+
   const isAdmin = currentUser.role === 'admin';
   const isManager = currentUser.role === 'yönetici';
   const isStaff = currentUser.role === 'personel';
   
   let servicesListHtml = '';
-  
-  if (isAdmin) {
-    const authServices = await apiGet('/api/admin/authorized-services-list');
-    // ... rest of logic stays same but we refine isAdmin check below
-    servicesListHtml = `
-      <div class="form-group">
-        <label>Yetkili Servis</label>
-        <select id="edit_svc_assigned_service_id">
-          <option value="">Seçiniz</option>
-          ${authServices.map(as => `<option value="${as.id}" ${as.id === s.service_id ? 'selected' : ''}>${as.name}</option>`).join('')}
-        </select>
-      </div>
-    `;
-  }
+  // Removed admin-only authorized services fetching as per requested refinement
 
   openModal(`
     <div class="modal-header">
@@ -748,25 +764,51 @@ async function openEditServiceModal(serviceId, services) {
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-section-title">Genel Bilgiler</div>
-        ${servicesListHtml}
+        <div class="form-group">
+          <label>Servis Kaynağı</label>
+          <select id="edit_svc_source" ${isStaff ? 'disabled' : ''}>
+            <option value="">Seçiniz...</option>
+            ${sources.map(src => `<option value="${src.name}" ${s.service_source === src.name ? 'selected' : ''}>${src.name}</option>`).join('')}
+          </select>
+        </div>
         <div class="form-group">
           <label>Durum</label>
           <select id="edit_svc_status">
-            <option value="Beklemede" ${s.status === 'Beklemede' ? 'selected' : ''}>Beklemede</option>
-            <option value="Devam Ediyor" ${s.status === 'Devam Ediyor' ? 'selected' : ''}>Devam Ediyor</option>
-            <option value="Tamamlandı" ${s.status === 'Tamamlandı' ? 'selected' : ''}>Tamamlandı</option>
-            <option value="İptal" ${s.status === 'İptal' ? 'selected' : ''}>İptal</option>
+            ${stages.length > 0 
+              ? stages.map(st => `<option value="${st.name}" ${s.status === st.name ? 'selected' : ''}>${st.name}</option>`).join('')
+              : `
+                <option value="Beklemede" ${s.status === 'Beklemede' ? 'selected' : ''}>Beklemede</option>
+                <option value="Devam Ediyor" ${s.status === 'Devam Ediyor' ? 'selected' : ''}>Devam Ediyor</option>
+                <option value="Tamamlandı" ${s.status === 'Tamamlandı' ? 'selected' : ''}>Tamamlandı</option>
+                <option value="İptal" ${s.status === 'İptal' ? 'selected' : ''}>İptal</option>
+              `
+            }
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Servis Aracı</label>
+          <select id="edit_svc_vehicle" ${isStaff ? 'disabled' : ''}>
+            <option value="">Seçiniz...</option>
+            ${vehicles.map(v => `<option value="${v.name}" ${s.service_vehicle === v.name ? 'selected' : ''}>${v.name}</option>`).join('')}
           </select>
         </div>
 
         <div class="form-section-title">Cihaz Bilgileri</div>
         <div class="form-group">
           <label>Cihaz Markası</label>
-          <input type="text" id="edit_svc_device_brand" value="${s.device_brand || ''}" ${isStaff ? 'readonly' : ''}>
+          <select id="edit_svc_device_brand" ${isStaff ? 'disabled' : ''}>
+            <option value="">Seçiniz...</option>
+            ${brands.map(b => `<option value="${b.name}" ${s.device_brand === b.name ? 'selected' : ''}>${b.name}</option>`).join('')}
+            ${s.device_brand && !brands.find(b => b.name === s.device_brand) ? `<option value="${s.device_brand}" selected>${s.device_brand}</option>` : ''}
+          </select>
         </div>
         <div class="form-group">
           <label>Cihaz Türü</label>
-          <input type="text" id="edit_svc_device_type" value="${s.device_type || ''}" ${isStaff ? 'readonly' : ''}>
+          <select id="edit_svc_device_type" ${isStaff ? 'disabled' : ''}>
+            <option value="">Seçiniz...</option>
+            ${types.map(t => `<option value="${t.name}" ${s.device_type === t.name ? 'selected' : ''}>${t.name}</option>`).join('')}
+            ${s.device_type && !types.find(t => t.name === s.device_type) ? `<option value="${s.device_type}" selected>${s.device_type}</option>` : ''}
+          </select>
         </div>
         <div class="form-group">
           <label>Cihaz Modeli</label>
@@ -829,12 +871,11 @@ async function openEditServiceModal(serviceId, services) {
         warranty_period: document.getElementById('edit_svc_warranty_period').value.trim(),
         availability_date: document.getElementById('edit_svc_availability_date').value,
         time_start: document.getElementById('edit_svc_time_start').value,
-        time_end: document.getElementById('edit_svc_time_end').value
+        time_end: document.getElementById('edit_svc_time_end').value,
+        service_source: document.getElementById('edit_svc_source').value,
+        service_vehicle: document.getElementById('edit_svc_vehicle').value
       };
       
-      if (isAdmin) {
-        data.service_id = document.getElementById('edit_svc_assigned_service_id').value || null;
-      }
     }
 
     const result = await apiPut(`/api/services/${serviceId}`, data);
@@ -850,22 +891,10 @@ async function openEditServiceModal(serviceId, services) {
 
 // ===== CUSTOMERS PAGE =====
 async function renderCustomersPage(container) {
-  const [customers, authServices] = await Promise.all([
-    apiGet('/api/customers'),
-    currentUser.role === 'admin' ? apiGet('/api/admin/authorized-services-list') : Promise.resolve([])
-  ]);
+  const customers = await apiGet('/api/customers');
 
   let authServiceFilterHtml = '';
-  if (currentUser.role === 'admin') {
-    authServiceFilterHtml = `
-      <div class="filter-group">
-        <select id="custCompanyFilter" class="filter-select">
-          <option value="">Tüm Firmalar</option>
-          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-        </select>
-      </div>
-    `;
-  }
+  // Removed admin-only authorized services filter as per requested refinement
 
   container.innerHTML = `
     <div class="page-header">
@@ -907,20 +936,18 @@ async function renderCustomersPage(container) {
               <th>Telefon</th>
               <th>İl / İlçe</th>
               <th>Adres</th>
-              ${currentUser.role === 'admin' ? '<th>Yetkili Servis</th>' : ''}
               <th>İşlem</th>
             </tr>
           </thead>
           <tbody id="customersTableBody">
             ${customers.map(c => `
-              <tr data-id="${c.id}" data-name="${(c.full_name || '').toLowerCase()}" data-company="${c.service_id || ''}">
+              <tr data-id="${c.id}" data-name="${(c.full_name || '').toLowerCase()}">
                 <td><small>#${c.id}</small></td>
                 <td>${formatDate(c.created_at)}</td>
                 <td>${c.full_name || '-'}</td>
                 <td>${c.phone || '-'}</td>
                 <td>${[c.city, c.district].filter(Boolean).join(' / ') || '-'}</td>
                 <td>${c.address || '-'}</td>
-                ${currentUser.role === 'admin' ? `<td>${c.authorized_service_name || '-'}</td>` : ''}
                 <td>
                   <button class="btn-danger btn-sm delete-customer-btn" data-id="${c.id}">Sil</button>
                 </td>
@@ -935,22 +962,19 @@ async function renderCustomersPage(container) {
   // Filter Function
   const filterCustomers = () => {
     const q = document.getElementById('customerSearchInput').value.toLowerCase().trim();
-    const companyFilter = document.getElementById('custCompanyFilter')?.value || '';
     
     document.querySelectorAll('#customersTableBody tr').forEach(tr => {
       const id = tr.dataset.id;
       const name = tr.dataset.name;
-      const company = tr.dataset.company;
       
       const matchesSearch = !q || id.includes(q) || name.includes(q) || `#${id}`.includes(q);
-      const matchesCompany = !companyFilter || company === companyFilter;
       
-      tr.style.display = (matchesSearch && matchesCompany) ? '' : 'none';
+      tr.style.display = matchesSearch ? '' : 'none';
     });
   };
 
   document.getElementById('customerSearchInput')?.addEventListener('input', filterCustomers);
-  document.getElementById('custCompanyFilter')?.addEventListener('change', filterCustomers);
+  
 
   // New customer
   document.getElementById('newCustomerBtn')?.addEventListener('click', openNewCustomerModal);
@@ -967,19 +991,6 @@ async function renderCustomersPage(container) {
 }
 
 async function openNewCustomerModal() {
-  let servicesListHtml = '';
-  if (currentUser.role === 'admin') {
-    const authServices = await apiGet('/api/admin/authorized-services-list');
-    servicesListHtml = `
-      <div class="form-group">
-        <label>Yetkili Servis</label>
-        <select id="cust_service_id">
-          <option value="">Seçiniz</option>
-          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-        </select>
-      </div>
-    `;
-  }
 
   openModal(`
     <div class="modal-header">
@@ -990,7 +1001,6 @@ async function openNewCustomerModal() {
     </div>
     <div class="modal-body">
       <div class="form-grid">
-        ${servicesListHtml}
         <div class="form-group">
           <label>Müşteri Tipi</label>
           <select id="cust_customer_type">
@@ -1050,9 +1060,7 @@ async function openNewCustomerModal() {
       id_number: document.getElementById('cust_id_number').value.trim()
     };
 
-    if (currentUser.role === 'admin') {
-      data.service_id = document.getElementById('cust_service_id').value || null;
-    }
+    
 
     if (!data.full_name) {
       errorEl.textContent = 'Müşteri adı gereklidir';
@@ -1073,22 +1081,10 @@ async function openNewCustomerModal() {
 
 // ===== PERSONNEL PAGE =====
 async function renderPersonnelPage(container) {
-  const [personnel, authServices] = await Promise.all([
-    apiGet('/api/personnel'),
-    currentUser.role === 'admin' ? apiGet('/api/admin/authorized-services-list') : Promise.resolve([])
-  ]);
+  const personnel = await apiGet('/api/personnel');
 
   let authServiceFilterHtml = '';
-  if (currentUser.role === 'admin') {
-    authServiceFilterHtml = `
-      <div class="filter-group">
-        <select id="persCompanyFilter" class="filter-select">
-          <option value="">Tüm Firmalar</option>
-          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-        </select>
-      </div>
-    `;
-  }
+  // Removed admin-only authorized services filter as per requested refinement
 
   container.innerHTML = `
     <div class="page-header">
@@ -1140,13 +1136,12 @@ async function renderPersonnelPage(container) {
               <th>Telefon</th>
               <th>E-posta</th>
               <th>Kullanıcı Adı</th>
-              ${currentUser.role === 'admin' ? '<th>Yetkili Servis</th>' : ''}
               <th>İşlem</th>
             </tr>
           </thead>
           <tbody id="personnelTableBody">
             ${personnel.map(p => `
-              <tr data-id="${p.id}" data-name="${(p.full_name || '').toLowerCase()}" data-role="${p.role}" data-company="${p.service_id || ''}">
+              <tr data-id="${p.id}" data-name="${(p.full_name || '').toLowerCase()}" data-role="${p.role}">
                 <td><small>#${p.id}</small></td>
                 <td>
                   <div class="personnel-avatar">
@@ -1162,7 +1157,6 @@ async function renderPersonnelPage(container) {
                 <td>${p.phone || '-'}</td>
                 <td>${p.email || '-'}</td>
                 <td>${p.username}</td>
-                ${currentUser.role === 'admin' ? `<td>${p.authorized_service_name || '-'}</td>` : ''}
                 <td>
                   <div style="display:flex;gap:0.25rem;">
                     ${currentUser.role === 'admin' ? `
@@ -1192,25 +1186,21 @@ async function renderPersonnelPage(container) {
   const filterPersonnel = () => {
     const searchTerm = document.getElementById('personnelSearchInput').value.toLowerCase().trim();
     const roleFilter = document.getElementById('roleFilter').value;
-    const companyFilter = document.getElementById('persCompanyFilter')?.value || '';
     
     document.querySelectorAll('#personnelTableBody tr').forEach(tr => {
       const id = tr.dataset.id;
       const name = tr.dataset.name;
       const role = tr.dataset.role;
-      const company = tr.dataset.company;
       
       const matchesSearch = !searchTerm || id.includes(searchTerm) || name.includes(searchTerm) || `#${id}`.includes(searchTerm);
       const matchesRole = !roleFilter || role === roleFilter;
-      const matchesCompany = !companyFilter || company === companyFilter;
       
-      tr.style.display = (matchesSearch && matchesRole && matchesCompany) ? '' : 'none';
+      tr.style.display = (matchesSearch && matchesRole) ? '' : 'none';
     });
   };
 
   document.getElementById('personnelSearchInput')?.addEventListener('input', filterPersonnel);
   document.getElementById('roleFilter')?.addEventListener('change', filterPersonnel);
-  document.getElementById('persCompanyFilter')?.addEventListener('change', filterPersonnel);
 
   document.getElementById('newPersonnelBtn')?.addEventListener('click', openNewPersonnelModal);
 
@@ -1230,18 +1220,7 @@ async function renderPersonnelPage(container) {
 
 async function openNewPersonnelModal() {
   let servicesListHtml = '';
-  if (currentUser.role === 'admin') {
-    const authServices = await apiGet('/api/admin/authorized-services-list');
-    servicesListHtml = `
-      <div class="form-group">
-        <label>Yetkili Servis *</label>
-        <select id="pers_service_id" required>
-          <option value="">Seçiniz</option>
-          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-        </select>
-      </div>
-    `;
-  }
+  // Removed admin-only authorized services fetching as per requested refinement
 
   openModal(`
     <div class="modal-header">
@@ -1403,7 +1382,7 @@ async function openEditPersonnelModal(personnelId, personnelList) {
   const p = personnelList.find(item => item.id == personnelId);
   if (!p) return;
 
-  const authServices = await apiGet('/api/admin/authorized-services-list');
+  // Removed admin-only authorized services fetching as per requested refinement
 
   openModal(`
     <div class="modal-header">
@@ -1429,15 +1408,7 @@ async function openEditPersonnelModal(personnelId, personnelList) {
         </div>
       </div>
 
-      <div class="form-grid">
         <div class="form-section-title">Kişisel Bilgiler</div>
-        <div class="form-group">
-          <label>Yetkili Servis *</label>
-          <select id="edit_pers_service_id" required>
-            <option value="">Seçiniz</option>
-            ${authServices.map(s => `<option value="${s.id}" ${s.id === p.service_id ? 'selected' : ''}>${s.name}</option>`).join('')}
-          </select>
-        </div>
         <div class="form-group">
           <label>Ad Soyad *</label>
           <input type="text" id="edit_pers_full_name" value="${p.full_name || ''}" required>
@@ -1567,71 +1538,307 @@ async function openEditPersonnelModal(personnelId, personnelList) {
 }
 
 
-// ===== ADMIN PAGE =====
-async function renderAdminPage(container) {
-  if (currentUser.role !== 'admin') {
-    container.innerHTML = '<div class="empty-state"><h3>Yetkiniz yok</h3></div>';
+
+// ===== SETTINGS PAGE =====
+async function renderSettingsPage(container) {
+  if (currentUser.role === 'personel') {
+    container.innerHTML = '<div class="error-state"><h1>Yetkiniz yok</h1><p>Bu sayfaya erişim yetkiniz bulunmamaktadır.</p></div>';
     return;
   }
+  const brands = await apiGet('/api/settings/brands');
+  const types = await apiGet('/api/settings/types');
+  const stages = await apiGet('/api/settings/stages');
+  const sources = await apiGet('/api/settings/sources');
+  const vehicles = await apiGet('/api/settings/vehicles');
 
-  const authServices = await apiGet('/api/admin/authorized-services-list');
+  const isAdmin = currentUser.role === 'admin';
+  const isManager = currentUser.role === 'yönetici';
 
   container.innerHTML = `
     <div class="page-header">
-      <h1>Admin Paneli</h1>
+      <h1>Ayarlar</h1>
     </div>
 
-    <div class="admin-grid">
-      <div class="admin-section">
-        <h3>Yetkili Servisler</h3>
-        <ul class="admin-list" id="adminServicesList">
-          ${authServices.length === 0 ? '<li class="admin-list-item" style="color:var(--text-muted);">Henüz yetkili servis yok</li>' : ''}
-          ${authServices.map(s => `
-            <li class="admin-list-item">
-              <span>${s.name}</span>
-              <button class="btn-danger btn-sm delete-auth-service-btn" data-id="${s.id}">Sil</button>
-            </li>
-          `).join('')}
-        </ul>
-        <div class="admin-add-form">
-          <input type="text" id="newAuthServiceName" placeholder="Yetkili servis adı">
-          <button class="btn-primary btn-sm" id="addAuthServiceBtn">Ekle</button>
-        </div>
-      </div>
+    <div class="settings-hub">
+      <div class="settings-group-premium">
+        <label class="group-label">Servis Tanımlamaları</label>
+        <div class="category-grid">
+          ${isAdmin ? `
+            <!-- Cihaz Markaları Card -->
+            <div class="category-card" onclick="this.classList.toggle('active')">
+              <div class="card-info">
+                <div class="icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                </div>
+                <div class="details">
+                  <h3>Cihaz Markaları</h3>
+                  <p>${brands.length} Tanımlı</p>
+                </div>
+                <div class="chevron">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              <div class="card-content" onclick="event.stopPropagation()">
+                <ul class="settings-list compact">
+                  ${brands.map(b => `
+                    <li class="list-item">
+                      <span>${b.name}</span>
+                      ${isAdmin ? `
+                        <button class="btn-icon delete-brand-btn" data-id="${b.id}">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                      ` : ''}
+                    </li>
+                  `).join('')}
+                </ul>
+                ${isAdmin ? `
+                  <div class="settings-add-form mini">
+                    <input type="text" id="newBrandName" placeholder="Yeni marka adı">
+                    <button class="btn-primary btn-sm" id="addBrandBtn">Ekle</button>
+                  </div>
+                ` : '<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem;text-align:center;">Sadece görüntüleme yetkiniz var.</p>'}
+              </div>
+            </div>
 
-      <div class="admin-section">
-        <h3>Servis Atama</h3>
-        <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:1rem;">
-          Servisler sayfasından herhangi bir servis kaydını farklı bir yetkili servise atayabilirsiniz.
-          Durumu da yine servisler sayfasından değiştirebilirsiniz.
-        </p>
-        <button class="btn-primary" onclick="document.querySelector('[data-page=services]').click()">
-          Servislere Git
-        </button>
+            <!-- Cihaz Türleri Card -->
+            <div class="category-card" onclick="this.classList.toggle('active')">
+              <div class="card-info">
+                <div class="icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </div>
+                <div class="details">
+                  <h3>Cihaz Türleri</h3>
+                  <p>${types.length} Tanımlı</p>
+                </div>
+                <div class="chevron">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              <div class="card-content" onclick="event.stopPropagation()">
+                <ul class="settings-list compact">
+                  ${types.map(t => `
+                    <li class="list-item">
+                      <span>${t.name}</span>
+                      ${isAdmin ? `
+                        <button class="btn-icon delete-type-btn" data-id="${t.id}">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                      ` : ''}
+                    </li>
+                  `).join('')}
+                </ul>
+                ${isAdmin ? `
+                  <div class="settings-add-form mini">
+                    <input type="text" id="newTypeName" placeholder="Yeni cihaz türü">
+                    <button class="btn-primary btn-sm" id="addTypeBtn">Ekle</button>
+                  </div>
+                ` : '<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem;text-align:center;">Sadece görüntüleme yetkiniz var.</p>'}
+              </div>
+            </div>
+
+            <!-- Servis Kaynakları Card -->
+            <div class="category-card" onclick="this.classList.toggle('active')">
+              <div class="card-info">
+                <div class="icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </div>
+                <div class="details">
+                  <h3>Servis Kaynakları</h3>
+                  <p>${sources.length} Tanımlı</p>
+                </div>
+                <div class="chevron">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              <div class="card-content" onclick="event.stopPropagation()">
+                <ul class="settings-list compact">
+                  ${sources.map(s => `
+                    <li class="list-item">
+                      <span>${s.name}</span>
+                      ${isAdmin ? `
+                        <button class="btn-icon delete-source-btn" data-id="${s.id}">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                      ` : ''}
+                    </li>
+                  `).join('')}
+                </ul>
+                ${isAdmin ? `
+                  <div class="settings-add-form mini">
+                    <input type="text" id="newSourceName" placeholder="Yeni servis kaynağı">
+                    <button class="btn-primary btn-sm" id="addSourceBtn">Ekle</button>
+                  </div>
+                ` : '<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem;text-align:center;">Sadece görüntüleme yetkiniz var.</p>'}
+              </div>
+            </div>
+
+            <!-- Servis Aşamaları Card -->
+            <div class="category-card" onclick="this.classList.toggle('active')">
+              <div class="card-info">
+                <div class="icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 12l-4-4-4 4M12 8v8"/></svg>
+                </div>
+                <div class="details">
+                  <h3>Servis Aşamaları</h3>
+                  <p>${stages.length} Tanımlı</p>
+                </div>
+                <div class="chevron">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              <div class="card-content" onclick="event.stopPropagation()">
+                <ul class="settings-list compact">
+                  ${stages.map(s => `
+                    <li class="list-item">
+                      <span>${s.name}</span>
+                      ${isAdmin ? `
+                        <button class="btn-icon delete-stage-btn" data-id="${s.id}">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                      ` : ''}
+                    </li>
+                  `).join('')}
+                </ul>
+                ${isAdmin ? `
+                  <div class="settings-add-form mini">
+                    <input type="text" id="newStageName" placeholder="Yeni servis aşaması">
+                    <button class="btn-primary btn-sm" id="addStageBtn">Ekle</button>
+                  </div>
+                ` : '<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem;text-align:center;">Sadece görüntüleme yetkiniz var.</p>'}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Servis Araçları Card -->
+          <div class="category-card" onclick="this.classList.toggle('active')">
+            <div class="card-info">
+              <div class="icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polyline points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+              </div>
+              <div class="details">
+                <h3>Servis Araçları</h3>
+                <p>${vehicles.length} Tanımlı</p>
+              </div>
+              <div class="chevron">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+            </div>
+            <div class="card-content" onclick="event.stopPropagation()">
+              <ul class="settings-list compact">
+                ${vehicles.map(v => `
+                  <li class="list-item">
+                    <span>${v.name}</span>
+                    ${(isAdmin || isManager) ? `
+                      <button class="btn-icon delete-vehicle-btn" data-id="${v.id}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                    ` : ''}
+                  </li>
+                `).join('')}
+              </ul>
+              ${(isAdmin || isManager) ? `
+                <div class="settings-add-form mini">
+                  <input type="text" id="newVehicleName" placeholder="Yeni araç adı/plaka">
+                  <button class="btn-primary btn-sm" id="addVehicleBtn">Ekle</button>
+                </div>
+              ` : '<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem;text-align:center;">Sadece görüntüleme yetkiniz var.</p>'}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   `;
 
-  // Add authorized service
-  document.getElementById('addAuthServiceBtn')?.addEventListener('click', async () => {
-    const input = document.getElementById('newAuthServiceName');
+  // Add Brand
+  document.getElementById('addBrandBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('newBrandName');
     const name = input.value.trim();
     if (!name) return;
-
-    const result = await apiPost('/api/admin/authorized-services', { name });
-    if (result.success) {
-      renderAdminPage(container);
-    } else {
-      alert(result.error || 'Bir hata oluştu');
-    }
+    await apiPost('/api/settings/brands', { name });
+    renderSettingsPage(container);
   });
 
-  // Delete authorized service
-  document.querySelectorAll('.delete-auth-service-btn').forEach(btn => {
+  // Delete Brand
+  document.querySelectorAll('.delete-brand-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (confirm('Bu yetkili servisi silmek istediğinize emin misiniz?')) {
-        await apiDelete(`/api/admin/authorized-services/${btn.dataset.id}`);
-        renderAdminPage(container);
+      if (confirm('Bu markayı silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/settings/brands/${btn.dataset.id}`);
+        renderSettingsPage(container);
+      }
+    });
+  });
+
+  // Add Type
+  document.getElementById('addTypeBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('newTypeName');
+    const name = input.value.trim();
+    if (!name) return;
+    await apiPost('/api/settings/types', { name });
+    renderSettingsPage(container);
+  });
+
+  document.querySelectorAll('.delete-type-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Bu türü silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/settings/types/${btn.dataset.id}`);
+        renderSettingsPage(container);
+      }
+    });
+  });
+
+  // Add Stage
+  document.getElementById('addStageBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('newStageName');
+    const name = input.value.trim();
+    if (!name) return;
+    await apiPost('/api/settings/stages', { name });
+    renderSettingsPage(container);
+  });
+
+  // Delete Stage
+  document.querySelectorAll('.delete-stage-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Bu aşamayı silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/settings/stages/${btn.dataset.id}`);
+        renderSettingsPage(container);
+      }
+    });
+  });
+
+  // Add Source
+  document.getElementById('addSourceBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('newSourceName');
+    const name = input.value.trim();
+    if (!name) return;
+    await apiPost('/api/settings/sources', { name });
+    renderSettingsPage(container);
+  });
+
+  // Delete Source
+  document.querySelectorAll('.delete-source-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Bu kaynağı silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/settings/sources/${btn.dataset.id}`);
+        renderSettingsPage(container);
+      }
+    });
+  });
+
+  // Add Vehicle
+  document.getElementById('addVehicleBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('newVehicleName');
+    const name = input.value.trim();
+    if (!name) return;
+    await apiPost('/api/settings/vehicles', { name });
+    renderSettingsPage(container);
+  });
+
+  // Delete Vehicle
+  document.querySelectorAll('.delete-vehicle-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Bu aracı silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/settings/vehicles/${btn.dataset.id}`);
+        renderSettingsPage(container);
       }
     });
   });

@@ -1,8 +1,9 @@
 --- PERSONNEL ---
 ID: 1, Name: Sistem Yöneticisi, User: admin, Role: admin, ServiceID: null
 ID: 2, Name: Enes, User: enes, Role: user, ServiceID: 3
-ID: 3, Name: şuheda, User: suheda, Role: yönetici, ServiceID: 3
-ID: 4, Name: emirhan, User: emirhan, Role: yönetici, ServiceID: null
+ID: 3, Name: şuheda, User: suheda, Role: personel, ServiceID: 3
+ID: 4, Name: emirhan, User: emirhan, Role: yönetici, ServiceID: 1
+ID: 5, Name: hırt hurt, User: hırto, Role: personel, ServiceID: 1
 
 --- CUSTOMERS ---
 ID: 1, Name: Zeynep Sude Oktay, ServiceID: 1

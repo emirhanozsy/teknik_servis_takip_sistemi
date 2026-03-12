@@ -1422,3 +1422,225 @@ body.is-admin .admin-only {
     grid-template-columns: 1fr;
   }
 }
+
+/* Settings Page Styles */
+.settings-hub {
+  margin-top: 1rem;
+}
+
+.settings-group-premium {
+  margin-top: 2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 1.5rem 1.5rem;
+  position: relative;
+  background: var(--bg-secondary);
+}
+
+.group-label {
+  position: absolute;
+  top: -12px;
+  left: 30px;
+  background: var(--bg-secondary);
+  padding: 0 15px;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.category-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: var(--transition);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+
+.category-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.category-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+.category-card .card-info {
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: relative;
+}
+
+.category-card .icon {
+  width: 48px;
+  height: 48px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.category-card .details h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.category-card .details p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.category-card .chevron {
+  margin-left: auto;
+  transition: var(--transition);
+  color: var(--text-muted);
+}
+
+.category-card.active .chevron {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.category-card .card-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: var(--transition);
+  padding: 0 1.25rem;
+  background: rgba(0,0,0,0.1);
+}
+
+.category-card.active .card-content {
+  max-height: 500px;
+  padding: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.settings-list.compact .list-item {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.settings-list.compact .list-item:last-child {
+  border-bottom: none;
+}
+
+.settings-add-form.mini {
+  margin-top: 1rem;
+  gap: 0.5rem;
+}
+
+.settings-add-form.mini input {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.settings-section {
+  background: var(--bg-card);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+.settings-section h3 {
+  margin-bottom: 1.2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-list {
+  list-style: none;
+  margin-bottom: 1.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.settings-list .list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.5rem;
+  transition: var(--transition);
+}
+
+.settings-list .list-item:hover {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.settings-list .list-item span {
+  font-size: 0.95rem;
+}
+
+.settings-list .list-item small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.settings-list .list-item.empty {
+  justify-content: center;
+  color: var(--text-muted);
+  font-style: italic;
+  border-style: dashed;
+}
+
+.settings-add-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.settings-add-form input {
+  flex: 1;
+}
+
+.settings-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-list::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 3px;
+}
+
+.settings-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

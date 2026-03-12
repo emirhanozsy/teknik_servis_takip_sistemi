@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const db = require('../db');
 const { requireAuth, requireManager, requireAdmin } = require('../middleware/auth');
 const router = express.Router();
@@ -66,7 +67,6 @@ router.get('/', requireAuth, (req, res) => {
   res.json(rows);
 });
 
-const fs = require('fs');
 
 // Create new personnel (Admin or Manager)
 router.post('/', requireManager, (req, res, next) => {
