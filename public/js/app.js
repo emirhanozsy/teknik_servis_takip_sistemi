@@ -179,6 +179,21 @@ async function renderServicesPage(container) {
     <div class="page-header">
       <h1>Servisler</h1>
       <div class="page-header-actions">
+        <div class="search-bar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="serviceSearchInput" placeholder="ID veya Müşteri Ara...">
+        </div>
+        <div class="filter-group">
+          <select id="statusFilter" class="filter-select">
+            <option value="">Tüm Durumlar</option>
+            <option value="Beklemede">Beklemede</option>
+            <option value="Devam Ediyor">Devam Ediyor</option>
+            <option value="Tamamlandı">Tamamlandı</option>
+            <option value="İptal">İptal</option>
+          </select>
+        </div>
         <button class="btn-primary" id="newServiceBtn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -243,9 +258,9 @@ async function renderServicesPage(container) {
               <th>İşlem</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="servicesTableBody">
             ${services.map(s => `
-              <tr>
+              <tr data-id="${s.id}" data-customer="${(s.customer_name || '').toLowerCase()}" data-status="${s.status}">
                 <td><small>#${s.id}</small></td>
                 <td>${formatDate(s.created_at)}</td>
                 <td>${s.customer_name || '-'}</td>
@@ -282,6 +297,26 @@ async function renderServicesPage(container) {
       `}
     </div>
   `;
+
+  // Filter Function
+  const filterServices = () => {
+    const searchTerm = document.getElementById('serviceSearchInput').value.toLowerCase().trim();
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    document.querySelectorAll('#servicesTableBody tr').forEach(tr => {
+      const id = tr.dataset.id;
+      const customer = tr.dataset.customer;
+      const status = tr.dataset.status;
+      
+      const matchesSearch = !searchTerm || id.includes(searchTerm) || customer.includes(searchTerm) || `#${id}`.includes(searchTerm);
+      const matchesStatus = !statusFilter || status === statusFilter;
+      
+      tr.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
+    });
+  };
+
+  document.getElementById('serviceSearchInput')?.addEventListener('input', filterServices);
+  document.getElementById('statusFilter')?.addEventListener('change', filterServices);
 
   // Event listeners
   document.getElementById('newServiceBtn')?.addEventListener('click', openNewServiceModal);
@@ -702,6 +737,7 @@ async function renderCustomersPage(container) {
         <table>
           <thead>
             <tr>
+              <th>ID</th>
               <th>Eklenme Tarihi</th>
               <th>Müşteri Adı</th>
               <th>Telefon</th>
@@ -713,7 +749,8 @@ async function renderCustomersPage(container) {
           </thead>
           <tbody id="customersTableBody">
             ${customers.map(c => `
-              <tr data-name="${(c.full_name || '').toLowerCase()}">
+              <tr data-id="${c.id}" data-name="${(c.full_name || '').toLowerCase()}">
+                <td><small>#${c.id}</small></td>
                 <td>${formatDate(c.created_at)}</td>
                 <td>${c.full_name || '-'}</td>
                 <td>${c.phone || '-'}</td>
@@ -733,10 +770,12 @@ async function renderCustomersPage(container) {
 
   // Search
   document.getElementById('customerSearchInput')?.addEventListener('input', (e) => {
-    const q = e.target.value.toLowerCase();
+    const q = e.target.value.toLowerCase().trim();
     document.querySelectorAll('#customersTableBody tr').forEach(tr => {
-      const name = tr.dataset.name || '';
-      tr.style.display = name.includes(q) ? '' : 'none';
+      const id = tr.dataset.id;
+      const name = tr.dataset.name;
+      const matches = !q || id.includes(q) || name.includes(q) || `#${id}`.includes(q);
+      tr.style.display = matches ? '' : 'none';
     });
   });
 
@@ -867,6 +906,20 @@ async function renderPersonnelPage(container) {
     <div class="page-header">
       <h1>Personeller</h1>
       <div class="page-header-actions">
+        <div class="search-bar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="personnelSearchInput" placeholder="ID veya Personel Ara...">
+        </div>
+        <div class="filter-group">
+          <select id="roleFilter" class="filter-select">
+            <option value="">Tüm Yetkiler</option>
+            <option value="admin">Sistem Yöneticisi</option>
+            <option value="yönetici">Hizmet Yöneticisi</option>
+            <option value="personel">Saha Personeli</option>
+          </select>
+        </div>
         <button class="btn-primary" id="newPersonnelBtn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -890,6 +943,7 @@ async function renderPersonnelPage(container) {
         <table>
           <thead>
             <tr>
+              <th>ID</th>
               <th>Ad Soyad</th>
               <th>Pozisyon</th>
               <th>Başlama Tarihi</th>
@@ -900,9 +954,10 @@ async function renderPersonnelPage(container) {
               <th>İşlem</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="personnelTableBody">
             ${personnel.map(p => `
-              <tr>
+              <tr data-id="${p.id}" data-name="${(p.full_name || '').toLowerCase()}" data-role="${p.role}">
+                <td><small>#${p.id}</small></td>
                 <td>${p.full_name}</td>
                 <td>${p.position || '-'}</td>
                 <td>${formatDate(p.start_date)}</td>
@@ -934,6 +989,26 @@ async function renderPersonnelPage(container) {
       `}
     </div>
   `;
+
+  // Filter Function
+  const filterPersonnel = () => {
+    const searchTerm = document.getElementById('personnelSearchInput').value.toLowerCase().trim();
+    const roleFilter = document.getElementById('roleFilter').value;
+    
+    document.querySelectorAll('#personnelTableBody tr').forEach(tr => {
+      const id = tr.dataset.id;
+      const name = tr.dataset.name;
+      const role = tr.dataset.role;
+      
+      const matchesSearch = !searchTerm || id.includes(searchTerm) || name.includes(searchTerm) || `#${id}`.includes(searchTerm);
+      const matchesRole = !roleFilter || role === roleFilter;
+      
+      tr.style.display = (matchesSearch && matchesRole) ? '' : 'none';
+    });
+  };
+
+  document.getElementById('personnelSearchInput')?.addEventListener('input', filterPersonnel);
+  document.getElementById('roleFilter')?.addEventListener('change', filterPersonnel);
 
   document.getElementById('newPersonnelBtn')?.addEventListener('click', openNewPersonnelModal);
 

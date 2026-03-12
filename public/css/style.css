@@ -668,6 +668,37 @@ select option {
   width: 100%;
 }
 
+/* ===== Filters ===== */
+.filter-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-select {
+  padding: 0.7rem 1rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--transition);
+  outline: none;
+  min-width: 150px;
+}
+
+.filter-select:focus {
+  background: var(--bg-input-focus);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.filter-select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
 /* ===== Tables ===== */
 .table-container {
   background: var(--bg-card);
