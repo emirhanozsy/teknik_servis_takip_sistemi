@@ -138,7 +138,7 @@ async function renderDashboardPage(container) {
       <div class="dashboard-stats-side">
         <h1 class="brand-title">${currentUser.service_name || 'KOLTUXPRESS'}</h1>
         <div class="stat-row">
-          <span class="stat-label">Servis Sayısı</span>
+          <span class="stat-label">Toplam Servis Sayısı</span>
           <span class="stat-value">${stats.services || 0}</span>
         </div>
         <div class="stat-row">
@@ -164,7 +164,69 @@ async function renderDashboardPage(container) {
         </div>
       </div>
     </div>
+
+    <div class="dashboard-periodic-stats">
+      <div class="stat-card highlight">
+        <div class="label">Günlük <span>alınan servis sayısı</span></div>
+        <div class="value">${stats.periodic?.today || 0}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Haftalık <span>alınan servis sayısı</span></div>
+        <div class="value">${stats.periodic?.thisWeek || 0}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Aylık <span>alınan servis sayısı</span></div>
+        <div class="value">${stats.periodic?.thisMonth || 0}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Yıllık <span>alınan servis sayısı</span></div>
+        <div class="value">${stats.periodic?.thisYear || 0}</div>
+      </div>
+    </div>
+
+    <div class="dashboard-chart-section">
+      <div class="chart-header">
+        <h2>Son 7 Günlük Servis Grafiği</h2>
+      </div>
+      <div class="chart-container">
+        <canvas id="serviceChart"></canvas>
+      </div>
+    </div>
   `;
+
+  // Initialize Chart
+  const ctx = document.getElementById('serviceChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: stats.chart.map(d => d.label),
+      datasets: [{
+        label: 'Servis Sayısı',
+        data: stats.chart.map(d => d.value),
+        backgroundColor: stats.chart.map((_, i) => i % 2 === 0 ? '#60A5FA' : '#6366F1'),
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, color: '#94a3b8' },
+          grid: { color: 'rgba(148, 163, 184, 0.1)' }
+        },
+        x: {
+          ticks: { color: '#94a3b8' },
+          grid: { display: false }
+        }
+      }
+    }
+  });
 }
 
 // ===== Utility Functions =====
