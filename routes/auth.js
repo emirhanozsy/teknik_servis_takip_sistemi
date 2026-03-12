@@ -32,7 +32,8 @@ router.post('/login', (req, res) => {
     role: user.role,
     service_id: user.service_id,
     service_name: user.service_name,
-    position: user.position
+    position: user.position,
+    profile_picture: user.profile_picture
   };
 
   res.json({ success: true, user: req.session.user });

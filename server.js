@@ -17,6 +17,7 @@ app.use(session({
 
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -24,6 +25,7 @@ app.use('/api/services', require('./routes/services'));
 app.use('/api/customers', require('./routes/customers'));
 app.use('/api/personnel', require('./routes/personnel'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/dashboard', require('./routes/dashboard'));
 
 // Serve login page
 app.get('/', (req, res) => {
@@ -37,4 +39,10 @@ app.get('/dashboard', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Teknik Servis Yönetim Sistemi çalışıyor: http://localhost:${PORT}`);
+});
+
+// Error handling
+app.use((err, req, res, next) => {
+  console.error('Server Error:', err);
+  res.status(err.status || 500).json({ error: err.message || 'Bir iç sunucu hatası oluştu' });
 });

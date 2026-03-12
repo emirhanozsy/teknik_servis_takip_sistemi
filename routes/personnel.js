@@ -1,14 +1,40 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const path = require('path');
 const db = require('../db');
 const { requireAuth, requireManager, requireAdmin } = require('../middleware/auth');
 const router = express.Router();
+
+try { fs.appendFileSync('c:\\Users\\parad\\OneDrive\\Desktop\\Projeler\\website\\bambam_proje\\debug.log', `[${new Date().toISOString()}] personnel.js loaded\n`); } catch(e) {}
+
+// Multer configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'public/uploads/personnel');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'personnel-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Sadece resim dosyaları yüklenebilir!'), false);
+    }
+  },
+  limits: { fileSize: 2 * 1024 * 1024 } // 2MB limit
+});
 
 // Get all personnel (filtered by service_id for non-admin)
 router.get('/', requireAuth, (req, res) => {
   const user = req.session.user;
   
-  // Only admin and manager can see the full personnel list (others see nothing or restricted)
   if (user.role === 'personel') {
     return res.status(403).json({ error: 'Yetkiniz yok' });
   }
@@ -18,6 +44,7 @@ router.get('/', requireAuth, (req, res) => {
     rows = db.prepare(`
       SELECT p.id, p.service_id, p.full_name, p.start_date, p.position, p.phone, p.phone2,
              p.city, p.district, p.address, p.email, p.id_number, p.username, p.role, p.created_at,
+             p.profile_picture,
              a.name as authorized_service_name
       FROM personnel p
       LEFT JOIN authorized_services a ON p.service_id = a.id
@@ -27,6 +54,7 @@ router.get('/', requireAuth, (req, res) => {
     rows = db.prepare(`
       SELECT p.id, p.service_id, p.full_name, p.start_date, p.position, p.phone, p.phone2,
              p.city, p.district, p.address, p.email, p.id_number, p.username, p.role, p.created_at,
+             p.profile_picture,
              a.name as authorized_service_name
       FROM personnel p
       LEFT JOIN authorized_services a ON p.service_id = a.id
@@ -38,8 +66,18 @@ router.get('/', requireAuth, (req, res) => {
   res.json(rows);
 });
 
+const fs = require('fs');
+
 // Create new personnel (Admin or Manager)
-router.post('/', requireManager, (req, res) => {
+router.post('/', requireManager, (req, res, next) => {
+  const logMsg = `[${new Date().toISOString()}] Headers: ${JSON.stringify(req.headers)}\n`;
+  try { fs.appendFileSync('c:\\Users\\parad\\OneDrive\\Desktop\\Projeler\\website\\bambam_proje\\debug.log', logMsg); } catch(e) {}
+  next();
+}, upload.single('profile_picture'), (req, res) => {
+  const logMsg = `[${new Date().toISOString()}] POST /api/personnel\nBody: ${JSON.stringify(req.body)}\nFile: ${JSON.stringify(req.file)}\n\n`;
+  try { fs.appendFileSync('c:\\Users\\parad\\OneDrive\\Desktop\\Projeler\\website\\bambam_proje\\debug.log', logMsg); } catch(e) {}
+  console.log('POST /api/personnel - body:', req.body);
+  console.log('POST /api/personnel - file:', req.file);
   const user = req.session.user;
   const {
     full_name, start_date, position, phone, phone2,
@@ -51,7 +89,6 @@ router.post('/', requireManager, (req, res) => {
     return res.status(400).json({ error: 'Ad, kullanıcı adı ve şifre gerekli' });
   }
 
-  // Check if username already exists
   const existing = db.prepare('SELECT id FROM personnel WHERE username = ?').get(username);
   if (existing) {
     return res.status(400).json({ error: 'Bu kullanıcı adı zaten kullanılıyor' });
@@ -59,22 +96,21 @@ router.post('/', requireManager, (req, res) => {
 
   const serviceId = user.role === 'admin' ? (req.body.service_id || user.service_id) : user.service_id;
   const hash = bcrypt.hashSync(password, 10);
-  
-  // Manager can only create 'personel' or 'yönetici' in their own service.
   const finalRole = user.role === 'admin' ? (role || 'personel') : 'personel';
+  const profilePicture = req.file ? `/uploads/personnel/${req.file.filename}` : null;
 
   const result = db.prepare(`
     INSERT INTO personnel (service_id, full_name, start_date, position, phone, phone2,
-                           city, district, address, email, id_number, username, password_hash, role)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           city, district, address, email, id_number, username, password_hash, role, profile_picture)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(serviceId, full_name, start_date, position, phone, phone2,
-         city, district, address, email, id_number, username, hash, finalRole);
+         city, district, address, email, id_number, username, hash, finalRole, profilePicture);
 
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
 // Update personnel (Admin or Manager)
-router.put('/:id', requireManager, (req, res) => {
+router.put('/:id', requireManager, upload.single('profile_picture'), (req, res) => {
   const user = req.session.user;
   const person = db.prepare('SELECT * FROM personnel WHERE id = ?').get(req.params.id);
 
@@ -82,7 +118,6 @@ router.put('/:id', requireManager, (req, res) => {
     return res.status(404).json({ error: 'Personel bulunamadı' });
   }
 
-  // Manager can only update personnel in their own service center
   if (user.role !== 'admin' && person.service_id !== user.service_id) {
     return res.status(403).json({ error: 'Yetkiniz yok' });
   }
@@ -93,7 +128,6 @@ router.put('/:id', requireManager, (req, res) => {
     username, password, role, service_id
   } = req.body;
 
-  // Check username uniqueness if changed
   if (username && username !== person.username) {
     const existing = db.prepare('SELECT id FROM personnel WHERE username = ?').get(username);
     if (existing) {
@@ -105,8 +139,10 @@ router.put('/:id', requireManager, (req, res) => {
     UPDATE personnel SET 
       full_name = ?, start_date = ?, position = ?, phone = ?, phone2 = ?,
       city = ?, district = ?, address = ?, email = ?, id_number = ?,
-      username = ?, role = ?, service_id = ?
+      username = ?, role = ?, service_id = ?, profile_picture = ?
   `;
+  const profilePicture = req.file ? `/uploads/personnel/${req.file.filename}` : person.profile_picture;
+  
   const params = [
     full_name || person.full_name,
     start_date !== undefined ? start_date : person.start_date,
@@ -120,7 +156,8 @@ router.put('/:id', requireManager, (req, res) => {
     id_number !== undefined ? id_number : person.id_number,
     username || person.username,
     user.role === 'admin' ? (role || person.role) : person.role,
-    user.role === 'admin' ? (service_id !== undefined ? service_id : person.service_id) : person.service_id
+    user.role === 'admin' ? (service_id !== undefined ? service_id : person.service_id) : person.service_id,
+    profilePicture
   ];
 
   if (password) {
@@ -132,6 +169,14 @@ router.put('/:id', requireManager, (req, res) => {
   params.push(req.params.id);
 
   db.prepare(query).run(...params);
+
+  // Update session if editing self
+  if (parseInt(req.params.id) === user.id) {
+    req.session.user.full_name = full_name || person.full_name;
+    req.session.user.username = username || person.username;
+    req.session.user.profile_picture = profilePicture;
+    if (role && user.role === 'admin') req.session.user.role = role;
+  }
 
   res.json({ success: true });
 });

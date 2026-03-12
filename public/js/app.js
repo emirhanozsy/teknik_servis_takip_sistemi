@@ -28,7 +28,13 @@ function initApp() {
     'personel': 'Saha Personeli'
   };
   document.getElementById('userRole').textContent = roleMap[currentUser.role] || (currentUser.service_name || 'Personel');
-  document.getElementById('userAvatar').textContent = currentUser.full_name.charAt(0).toUpperCase();
+  
+  const avatarEl = document.getElementById('userAvatar');
+  if (currentUser.profile_picture) {
+    avatarEl.innerHTML = `<img src="${currentUser.profile_picture}" alt="${currentUser.full_name}" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;">`;
+  } else {
+    avatarEl.textContent = currentUser.full_name.charAt(0).toUpperCase();
+  }
 
   // Hide Personnel for staff
   if (currentUser.role === 'personel') {
@@ -97,18 +103,68 @@ function initApp() {
   });
 
   // Render initial page
-  renderPage('services');
+  // Render initial page
+  renderPage('home');
 }
 
 // ===== Page Router =====
 function renderPage(page) {
   const main = document.getElementById('mainContent');
   switch (page) {
+    case 'home': renderDashboardPage(main); break;
     case 'services': renderServicesPage(main); break;
     case 'customers': renderCustomersPage(main); break;
     case 'personnel': renderPersonnelPage(main); break;
     case 'admin': renderAdminPage(main); break;
   }
+}
+
+// ===== HOME / DASHBOARD PAGE =====
+async function renderDashboardPage(container) {
+  const stats = await apiGet('/api/dashboard/stats');
+  
+  const avatarHtml = currentUser.profile_picture 
+    ? `<img src="${currentUser.profile_picture}" alt="${currentUser.full_name}">`
+    : currentUser.full_name.charAt(0).toUpperCase();
+
+  const roleMap = {
+    'admin': 'Patron',
+    'yönetici': 'Hizmet Yöneticisi',
+    'personel': 'Saha Personeli'
+  };
+
+  container.innerHTML = `
+    <div class="dashboard-header-container">
+      <div class="dashboard-stats-side">
+        <h1 class="brand-title">${currentUser.service_name || 'KOLTUXPRESS'}</h1>
+        <div class="stat-row">
+          <span class="stat-label">Servis Sayısı</span>
+          <span class="stat-value">${stats.services || 0}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Müşteri Sayısı</span>
+          <span class="stat-value">${stats.customers || 0}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Personel Sayısı</span>
+          <span class="stat-value">${stats.personnel || 0}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Kasa Durumu</span>
+          <span class="stat-value">${(stats.cash || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL</span>
+        </div>
+      </div>
+      <div class="dashboard-profile-side">
+        <div class="dashboard-avatar">
+          ${avatarHtml}
+        </div>
+        <div class="dashboard-user-info">
+          <div class="dashboard-user-name">${currentUser.full_name}</div>
+          <div class="dashboard-user-role">${roleMap[currentUser.role] || 'Personel'}</div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // ===== Utility Functions =====
@@ -144,20 +200,30 @@ async function apiGet(url) {
 }
 
 async function apiPost(url, data) {
-  const res = await fetch(url, {
+  console.log('apiPost called:', url, data);
+  const isFormData = data && (data instanceof FormData || (data.constructor && data.constructor.name === 'FormData'));
+  const options = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
+    body: isFormData ? data : JSON.stringify(data)
+  };
+  if (!isFormData) {
+    options.headers = { 'Content-Type': 'application/json' };
+  }
+  const res = await fetch(url, options);
   return await res.json();
 }
 
 async function apiPut(url, data) {
-  const res = await fetch(url, {
+  console.log('apiPut called:', url, data);
+  const isFormData = data && (data instanceof FormData || (data.constructor && data.constructor.name === 'FormData'));
+  const options = {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
+    body: isFormData ? data : JSON.stringify(data)
+  };
+  if (!isFormData) {
+    options.headers = { 'Content-Type': 'application/json' };
+  }
+  const res = await fetch(url, options);
   return await res.json();
 }
 
@@ -1005,6 +1071,7 @@ async function renderPersonnelPage(container) {
           <thead>
             <tr>
               <th>ID</th>
+              <th></th>
               <th>Ad Soyad</th>
               <th>Pozisyon</th>
               <th>Başlama Tarihi</th>
@@ -1019,6 +1086,14 @@ async function renderPersonnelPage(container) {
             ${personnel.map(p => `
               <tr data-id="${p.id}" data-name="${(p.full_name || '').toLowerCase()}" data-role="${p.role}" data-company="${p.service_id || ''}">
                 <td><small>#${p.id}</small></td>
+                <td>
+                  <div class="personnel-avatar">
+                    ${p.profile_picture 
+                      ? `<img src="${p.profile_picture}" alt="${p.full_name}">` 
+                      : `<span>${(p.full_name || '?').charAt(0).toUpperCase()}</span>`
+                    }
+                  </div>
+                </td>
                 <td>${p.full_name}</td>
                 <td>${p.position || '-'}</td>
                 <td>${formatDate(p.start_date)}</td>
@@ -1114,6 +1189,19 @@ async function openNewPersonnelModal() {
       </button>
     </div>
     <div class="modal-body">
+      <div class="profile-upload-section">
+        <div class="profile-preview" id="pers_pic_preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div class="profile-upload-info">
+          <label class="btn-secondary btn-sm" style="cursor:pointer;">
+            Fotoğraf Seç
+            <input type="file" id="pers_profile_pic" accept="image/*" style="display:none;">
+          </label>
+          <p>JPG, PNG - Max 2MB</p>
+        </div>
+      </div>
+
       <div class="form-grid">
         <div class="form-section-title">Kişisel Bilgiler</div>
         ${servicesListHtml}
@@ -1184,39 +1272,55 @@ async function openNewPersonnelModal() {
     </div>
   `);
 
+  // Image preview
+  document.getElementById('pers_profile_pic').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('pers_pic_preview').innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      }
+      reader.readAsDataURL(file);
+    }
+  });
+
   document.getElementById('savePersonnelBtn').addEventListener('click', async () => {
     const errorEl = document.getElementById('pers_error');
     errorEl.style.display = 'none';
 
     try {
-      const data = {
-        full_name: document.getElementById('pers_full_name')?.value.trim() || '',
-        position: document.getElementById('pers_position')?.value.trim() || '',
-        start_date: document.getElementById('pers_start_date')?.value || '',
-        phone: document.getElementById('pers_phone')?.value.trim() || '',
-        phone2: document.getElementById('pers_phone2')?.value.trim() || '',
-        city: document.getElementById('pers_city')?.value.trim() || '',
-        district: document.getElementById('pers_district')?.value.trim() || '',
-        address: document.getElementById('pers_address')?.value.trim() || '',
-        email: document.getElementById('pers_email')?.value.trim() || '',
-        id_number: document.getElementById('pers_id_number')?.value.trim() || '',
-        username: document.getElementById('pers_username')?.value.trim() || '',
-        password: document.getElementById('pers_password')?.value || '',
-        role: document.getElementById('pers_role')?.value || 'personel'
-      };
+      const formData = new FormData();
+      formData.append('full_name', document.getElementById('pers_full_name')?.value.trim() || '');
+      formData.append('position', document.getElementById('pers_position')?.value.trim() || '');
+      formData.append('start_date', document.getElementById('pers_start_date')?.value || '');
+      formData.append('phone', document.getElementById('pers_phone')?.value.trim() || '');
+      formData.append('phone2', document.getElementById('pers_phone2')?.value.trim() || '');
+      formData.append('city', document.getElementById('pers_city')?.value.trim() || '');
+      formData.append('district', document.getElementById('pers_district')?.value.trim() || '');
+      formData.append('address', document.getElementById('pers_address')?.value.trim() || '');
+      formData.append('email', document.getElementById('pers_email')?.value.trim() || '');
+      formData.append('id_number', document.getElementById('pers_id_number')?.value.trim() || '');
+      formData.append('username', document.getElementById('pers_username')?.value.trim() || '');
+      formData.append('password', document.getElementById('pers_password')?.value || '');
+      formData.append('role', document.getElementById('pers_role')?.value || 'personel');
 
       const serviceEl = document.getElementById('pers_service_id');
       if (serviceEl) {
-        data.service_id = serviceEl.value || null;
+        formData.append('service_id', serviceEl.value || '');
       }
 
-      if (!data.full_name || !data.username || !data.password) {
+      const fileInput = document.getElementById('pers_profile_pic');
+      if (fileInput.files[0]) {
+        formData.append('profile_picture', fileInput.files[0]);
+      }
+
+      if (!formData.get('full_name') || !formData.get('username') || !formData.get('password')) {
         errorEl.textContent = 'Ad, kullanıcı adı ve şifre alanları zorunludur';
         errorEl.style.display = 'block';
         return;
       }
 
-      const result = await apiPost('/api/personnel', data);
+      const result = await apiPost('/api/personnel', formData);
       if (result.success) {
         closeModal();
         renderPage('personnel');
@@ -1247,6 +1351,22 @@ async function openEditPersonnelModal(personnelId, personnelList) {
       </button>
     </div>
     <div class="modal-body">
+      <div class="profile-upload-section">
+        <div class="profile-preview" id="edit_pers_pic_preview">
+          ${p.profile_picture 
+            ? `<img src="${p.profile_picture}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">` 
+            : `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
+          }
+        </div>
+        <div class="profile-upload-info">
+          <label class="btn-secondary btn-sm" style="cursor:pointer;">
+            Değiştir
+            <input type="file" id="edit_pers_profile_pic" accept="image/*" style="display:none;">
+          </label>
+          <p>JPG, PNG - Max 2MB</p>
+        </div>
+      </div>
+
       <div class="form-grid">
         <div class="form-section-title">Kişisel Bilgiler</div>
         <div class="form-group">
@@ -1324,35 +1444,51 @@ async function openEditPersonnelModal(personnelId, personnelList) {
     </div>
   `);
 
+  // Image preview
+  document.getElementById('edit_pers_profile_pic').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('edit_pers_pic_preview').innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      }
+      reader.readAsDataURL(file);
+    }
+  });
+
   document.getElementById('saveEditPersonnelBtn').addEventListener('click', async () => {
     const errorEl = document.getElementById('edit_pers_error');
     errorEl.style.display = 'none';
 
     try {
-      const data = {
-        service_id: document.getElementById('edit_pers_service_id')?.value || null,
-        full_name: document.getElementById('edit_pers_full_name')?.value.trim() || '',
-        position: document.getElementById('edit_pers_position')?.value.trim() || '',
-        start_date: document.getElementById('edit_pers_start_date')?.value || '',
-        phone: document.getElementById('edit_pers_phone')?.value.trim() || '',
-        phone2: document.getElementById('edit_pers_phone2')?.value.trim() || '',
-        city: document.getElementById('edit_pers_city')?.value.trim() || '',
-        district: document.getElementById('edit_pers_district')?.value.trim() || '',
-        address: document.getElementById('edit_pers_address')?.value.trim() || '',
-        email: document.getElementById('edit_pers_email')?.value.trim() || '',
-        id_number: document.getElementById('edit_pers_id_number')?.value.trim() || '',
-        username: document.getElementById('edit_pers_username')?.value.trim() || '',
-        password: document.getElementById('edit_pers_password')?.value || '',
-        role: document.getElementById('edit_pers_role')?.value || p.role
-      };
+      const formData = new FormData();
+      formData.append('service_id', document.getElementById('edit_pers_service_id')?.value || '');
+      formData.append('full_name', document.getElementById('edit_pers_full_name')?.value.trim() || '');
+      formData.append('position', document.getElementById('edit_pers_position')?.value.trim() || '');
+      formData.append('start_date', document.getElementById('edit_pers_start_date')?.value || '');
+      formData.append('phone', document.getElementById('edit_pers_phone')?.value.trim() || '');
+      formData.append('phone2', document.getElementById('edit_pers_phone2')?.value.trim() || '');
+      formData.append('city', document.getElementById('edit_pers_city')?.value.trim() || '');
+      formData.append('district', document.getElementById('edit_pers_district')?.value.trim() || '');
+      formData.append('address', document.getElementById('edit_pers_address')?.value.trim() || '');
+      formData.append('email', document.getElementById('edit_pers_email')?.value.trim() || '');
+      formData.append('id_number', document.getElementById('edit_pers_id_number')?.value.trim() || '');
+      formData.append('username', document.getElementById('edit_pers_username')?.value.trim() || '');
+      formData.append('password', document.getElementById('edit_pers_password')?.value || '');
+      formData.append('role', document.getElementById('edit_pers_role')?.value || p.role);
 
-      if (!data.full_name || !data.username) {
+      const fileInput = document.getElementById('edit_pers_profile_pic');
+      if (fileInput.files[0]) {
+        formData.append('profile_picture', fileInput.files[0]);
+      }
+
+      if (!formData.get('full_name') || !formData.get('username')) {
         errorEl.textContent = 'Ad ve kullanıcı adı alanları zorunludur';
         errorEl.style.display = 'block';
         return;
       }
 
-      const result = await apiPut(`/api/personnel/${personnelId}`, data);
+      const result = await apiPut(`/api/personnel/${personnelId}`, formData);
       if (result.success) {
         closeModal();
         renderPage('personnel');
