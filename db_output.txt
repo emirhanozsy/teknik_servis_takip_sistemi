@@ -1,0 +1,13 @@
+--- PERSONNEL ---
+ID: 1, Name: Sistem Yöneticisi, User: admin, Role: admin, ServiceID: null
+ID: 2, Name: Enes, User: enes, Role: user, ServiceID: 3
+ID: 3, Name: şuheda, User: suheda, Role: yönetici, ServiceID: 3
+ID: 4, Name: emirhan, User: emirhan, Role: yönetici, ServiceID: null
+
+--- CUSTOMERS ---
+ID: 1, Name: Zeynep Sude Oktay, ServiceID: 1
+ID: 2, Name: Kurumsal, ServiceID: 3
+
+--- AUTHORIZED SERVICES ---
+ID: 1, Name: Asoss Mobilya Servis
+ID: 3, Name: Koltuxpress

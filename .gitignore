@@ -29,3 +29,6 @@ Thumbs.db
 *.gif
 *.webp
 *.svg
+
+# CHANGELOG
+CHANGELOG.md

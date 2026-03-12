@@ -37,11 +37,16 @@ router.get('/search', requireAuth, (req, res) => {
   let rows;
   if (user.role === 'admin') {
     rows = db.prepare(`
-      SELECT * FROM customers WHERE full_name LIKE ? ORDER BY full_name LIMIT 10
+      SELECT * FROM customers 
+      WHERE full_name LIKE ? 
+      ORDER BY full_name LIMIT 10
     `).all(`%${q}%`);
   } else {
+    // Non-admins see their own service's customers
     rows = db.prepare(`
-      SELECT * FROM customers WHERE full_name LIKE ? AND service_id = ? ORDER BY full_name LIMIT 10
+      SELECT * FROM customers 
+      WHERE full_name LIKE ? AND service_id = ? 
+      ORDER BY full_name LIMIT 10
     `).all(`%${q}%`, user.service_id);
   }
 
@@ -57,7 +62,7 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Müşteri adı gerekli' });
   }
 
-  const serviceId = user.role === 'admin' ? (req.body.service_id || user.service_id) : user.service_id;
+  const serviceId = user.role === 'admin' ? (req.body.service_id || null) : user.service_id;
 
   const result = db.prepare(`
     INSERT INTO customers (service_id, customer_type, full_name, phone, phone2, city, district, address, id_number)

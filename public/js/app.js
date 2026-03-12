@@ -232,6 +232,7 @@ async function renderServicesPage(container) {
         <table>
           <thead>
             <tr>
+              <th>ID</th>
               <th>Tarih</th>
               <th>Müşteri</th>
               <th>Cihaz</th>
@@ -245,6 +246,7 @@ async function renderServicesPage(container) {
           <tbody>
             ${services.map(s => `
               <tr>
+                <td><small>#${s.id}</small></td>
                 <td>${formatDate(s.created_at)}</td>
                 <td>${s.customer_name || '-'}</td>
                 <td>${[s.device_brand, s.device_model].filter(Boolean).join(' ') || '-'}</td>
@@ -752,7 +754,21 @@ async function renderCustomersPage(container) {
   });
 }
 
-function openNewCustomerModal() {
+async function openNewCustomerModal() {
+  let servicesListHtml = '';
+  if (currentUser.role === 'admin') {
+    const authServices = await apiGet('/api/admin/authorized-services-list');
+    servicesListHtml = `
+      <div class="form-group">
+        <label>Yetkili Servis</label>
+        <select id="cust_service_id">
+          <option value="">Seçiniz</option>
+          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
+
   openModal(`
     <div class="modal-header">
       <h2>Yeni Müşteri</h2>
@@ -762,6 +778,7 @@ function openNewCustomerModal() {
     </div>
     <div class="modal-body">
       <div class="form-grid">
+        ${servicesListHtml}
         <div class="form-group">
           <label>Müşteri Tipi</label>
           <select id="cust_customer_type">
@@ -820,6 +837,10 @@ function openNewCustomerModal() {
       address: document.getElementById('cust_address').value.trim(),
       id_number: document.getElementById('cust_id_number').value.trim()
     };
+
+    if (currentUser.role === 'admin') {
+      data.service_id = document.getElementById('cust_service_id').value || null;
+    }
 
     if (!data.full_name) {
       errorEl.textContent = 'Müşteri adı gereklidir';
@@ -997,6 +1018,15 @@ async function openNewPersonnelModal() {
           <input type="text" id="pers_id_number" placeholder="TC Kimlik No">
         </div>
 
+        <div class="form-section-title">Giriş Bilgileri ve Yetki</div>
+        <div class="form-group">
+          <label>Kullanıcı Adı *</label>
+          <input type="text" id="pers_username" placeholder="Kullanıcı adı" required>
+        </div>
+        <div class="form-group">
+          <label>Şifre *</label>
+          <input type="password" id="pers_password" placeholder="Şifre" required>
+        </div>
         <div class="form-group">
           <label>Yetki / Rol *</label>
           <select id="pers_role" required>
@@ -1018,39 +1048,45 @@ async function openNewPersonnelModal() {
     const errorEl = document.getElementById('pers_error');
     errorEl.style.display = 'none';
 
-    const data = {
-      full_name: document.getElementById('pers_full_name').value.trim(),
-      position: document.getElementById('pers_position').value.trim(),
-      start_date: document.getElementById('pers_start_date').value,
-      phone: document.getElementById('pers_phone').value.trim(),
-      phone2: document.getElementById('pers_phone2').value.trim(),
-      city: document.getElementById('pers_city').value.trim(),
-      district: document.getElementById('pers_district').value.trim(),
-      address: document.getElementById('pers_address').value.trim(),
-      email: document.getElementById('pers_email').value.trim(),
-      id_number: document.getElementById('pers_id_number').value.trim(),
-      username: document.getElementById('pers_username').value.trim(),
-      password: document.getElementById('pers_password').value,
-      role: document.getElementById('pers_role').value
-    };
+    try {
+      const data = {
+        full_name: document.getElementById('pers_full_name')?.value.trim() || '',
+        position: document.getElementById('pers_position')?.value.trim() || '',
+        start_date: document.getElementById('pers_start_date')?.value || '',
+        phone: document.getElementById('pers_phone')?.value.trim() || '',
+        phone2: document.getElementById('pers_phone2')?.value.trim() || '',
+        city: document.getElementById('pers_city')?.value.trim() || '',
+        district: document.getElementById('pers_district')?.value.trim() || '',
+        address: document.getElementById('pers_address')?.value.trim() || '',
+        email: document.getElementById('pers_email')?.value.trim() || '',
+        id_number: document.getElementById('pers_id_number')?.value.trim() || '',
+        username: document.getElementById('pers_username')?.value.trim() || '',
+        password: document.getElementById('pers_password')?.value || '',
+        role: document.getElementById('pers_role')?.value || 'personel'
+      };
 
-    const serviceEl = document.getElementById('pers_service_id');
-    if (serviceEl) {
-      data.service_id = serviceEl.value || null;
-    }
+      const serviceEl = document.getElementById('pers_service_id');
+      if (serviceEl) {
+        data.service_id = serviceEl.value || null;
+      }
 
-    if (!data.full_name || !data.username || !data.password) {
-      errorEl.textContent = 'Ad, kullanıcı adı ve şifre alanları zorunludur';
-      errorEl.style.display = 'block';
-      return;
-    }
+      if (!data.full_name || !data.username || !data.password) {
+        errorEl.textContent = 'Ad, kullanıcı adı ve şifre alanları zorunludur';
+        errorEl.style.display = 'block';
+        return;
+      }
 
-    const result = await apiPost('/api/personnel', data);
-    if (result.success) {
-      closeModal();
-      renderPage('personnel');
-    } else {
-      errorEl.textContent = result.error || 'Bir hata oluştu';
+      const result = await apiPost('/api/personnel', data);
+      if (result.success) {
+        closeModal();
+        renderPage('personnel');
+      } else {
+        errorEl.textContent = result.error || 'Bir hata oluştu';
+        errorEl.style.display = 'block';
+      }
+    } catch (err) {
+      console.error('Personnel save error:', err);
+      errorEl.textContent = 'Bir hata oluştu. Lütfen konsolu kontrol edin.';
       errorEl.style.display = 'block';
     }
   });
@@ -1152,35 +1188,41 @@ async function openEditPersonnelModal(personnelId, personnelList) {
     const errorEl = document.getElementById('edit_pers_error');
     errorEl.style.display = 'none';
 
-    const data = {
-      service_id: document.getElementById('edit_pers_service_id').value || null,
-      full_name: document.getElementById('edit_pers_full_name').value.trim(),
-      position: document.getElementById('edit_pers_position').value.trim(),
-      start_date: document.getElementById('edit_pers_start_date').value,
-      phone: document.getElementById('edit_pers_phone').value.trim(),
-      phone2: document.getElementById('edit_pers_phone2').value.trim(),
-      city: document.getElementById('edit_pers_city').value.trim(),
-      district: document.getElementById('edit_pers_district').value.trim(),
-      address: document.getElementById('edit_pers_address').value.trim(),
-      email: document.getElementById('edit_pers_email').value.trim(),
-      id_number: document.getElementById('edit_pers_id_number').value.trim(),
-      username: document.getElementById('edit_pers_username').value.trim(),
-      password: document.getElementById('edit_pers_password').value,
-      role: document.getElementById('edit_pers_role').value
-    };
+    try {
+      const data = {
+        service_id: document.getElementById('edit_pers_service_id')?.value || null,
+        full_name: document.getElementById('edit_pers_full_name')?.value.trim() || '',
+        position: document.getElementById('edit_pers_position')?.value.trim() || '',
+        start_date: document.getElementById('edit_pers_start_date')?.value || '',
+        phone: document.getElementById('edit_pers_phone')?.value.trim() || '',
+        phone2: document.getElementById('edit_pers_phone2')?.value.trim() || '',
+        city: document.getElementById('edit_pers_city')?.value.trim() || '',
+        district: document.getElementById('edit_pers_district')?.value.trim() || '',
+        address: document.getElementById('edit_pers_address')?.value.trim() || '',
+        email: document.getElementById('edit_pers_email')?.value.trim() || '',
+        id_number: document.getElementById('edit_pers_id_number')?.value.trim() || '',
+        username: document.getElementById('edit_pers_username')?.value.trim() || '',
+        password: document.getElementById('edit_pers_password')?.value || '',
+        role: document.getElementById('edit_pers_role')?.value || p.role
+      };
 
-    if (!data.full_name || !data.username) {
-      errorEl.textContent = 'Ad ve kullanıcı adı alanları zorunludur';
-      errorEl.style.display = 'block';
-      return;
-    }
+      if (!data.full_name || !data.username) {
+        errorEl.textContent = 'Ad ve kullanıcı adı alanları zorunludur';
+        errorEl.style.display = 'block';
+        return;
+      }
 
-    const result = await apiPut(`/api/personnel/${personnelId}`, data);
-    if (result.success) {
-      closeModal();
-      renderPage('personnel');
-    } else {
-      errorEl.textContent = result.error || 'Bir hata oluştu';
+      const result = await apiPut(`/api/personnel/${personnelId}`, data);
+      if (result.success) {
+        closeModal();
+        renderPage('personnel');
+      } else {
+        errorEl.textContent = result.error || 'Bir hata oluştu';
+        errorEl.style.display = 'block';
+      }
+    } catch (err) {
+      console.error('Edit personnel save error:', err);
+      errorEl.textContent = 'Bir hata oluştu. Lütfen konsolu kontrol edin.';
       errorEl.style.display = 'block';
     }
   });
