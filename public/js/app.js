@@ -168,12 +168,27 @@ async function apiDelete(url) {
 
 // ===== SERVICES PAGE =====
 async function renderServicesPage(container) {
-  const services = await apiGet('/api/services');
+  const [services, authServices] = await Promise.all([
+    apiGet('/api/services'),
+    currentUser.role === 'admin' ? apiGet('/api/admin/authorized-services-list') : Promise.resolve([])
+  ]);
 
   const totalCount = services.length;
   const waitingCount = services.filter(s => s.status === 'Beklemede').length;
   const progressCount = services.filter(s => s.status === 'Devam Ediyor').length;
   const doneCount = services.filter(s => s.status === 'Tamamlandı').length;
+
+  let authServiceFilterHtml = '';
+  if (currentUser.role === 'admin') {
+    authServiceFilterHtml = `
+      <div class="filter-group">
+        <select id="companyFilter" class="filter-select">
+          <option value="">Tüm Firmalar</option>
+          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
 
   container.innerHTML = `
     <div class="page-header">
@@ -194,6 +209,7 @@ async function renderServicesPage(container) {
             <option value="İptal">İptal</option>
           </select>
         </div>
+        ${authServiceFilterHtml}
         <button class="btn-primary" id="newServiceBtn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -260,7 +276,7 @@ async function renderServicesPage(container) {
           </thead>
           <tbody id="servicesTableBody">
             ${services.map(s => `
-              <tr data-id="${s.id}" data-customer="${(s.customer_name || '').toLowerCase()}" data-status="${s.status}">
+              <tr data-id="${s.id}" data-customer="${(s.customer_name || '').toLowerCase()}" data-status="${s.status}" data-company="${s.service_id || ''}">
                 <td><small>#${s.id}</small></td>
                 <td>${formatDate(s.created_at)}</td>
                 <td>${s.customer_name || '-'}</td>
@@ -302,21 +318,25 @@ async function renderServicesPage(container) {
   const filterServices = () => {
     const searchTerm = document.getElementById('serviceSearchInput').value.toLowerCase().trim();
     const statusFilter = document.getElementById('statusFilter').value;
+    const companyFilter = document.getElementById('companyFilter')?.value || '';
     
     document.querySelectorAll('#servicesTableBody tr').forEach(tr => {
       const id = tr.dataset.id;
       const customer = tr.dataset.customer;
       const status = tr.dataset.status;
+      const company = tr.dataset.company;
       
       const matchesSearch = !searchTerm || id.includes(searchTerm) || customer.includes(searchTerm) || `#${id}`.includes(searchTerm);
       const matchesStatus = !statusFilter || status === statusFilter;
+      const matchesCompany = !companyFilter || company === companyFilter;
       
-      tr.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
+      tr.style.display = (matchesSearch && matchesStatus && matchesCompany) ? '' : 'none';
     });
   };
 
   document.getElementById('serviceSearchInput')?.addEventListener('input', filterServices);
   document.getElementById('statusFilter')?.addEventListener('change', filterServices);
+  document.getElementById('companyFilter')?.addEventListener('change', filterServices);
 
   // Event listeners
   document.getElementById('newServiceBtn')?.addEventListener('click', openNewServiceModal);
@@ -702,7 +722,22 @@ async function openEditServiceModal(serviceId, services) {
 
 // ===== CUSTOMERS PAGE =====
 async function renderCustomersPage(container) {
-  const customers = await apiGet('/api/customers');
+  const [customers, authServices] = await Promise.all([
+    apiGet('/api/customers'),
+    currentUser.role === 'admin' ? apiGet('/api/admin/authorized-services-list') : Promise.resolve([])
+  ]);
+
+  let authServiceFilterHtml = '';
+  if (currentUser.role === 'admin') {
+    authServiceFilterHtml = `
+      <div class="filter-group">
+        <select id="custCompanyFilter" class="filter-select">
+          <option value="">Tüm Firmalar</option>
+          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
 
   container.innerHTML = `
     <div class="page-header">
@@ -714,6 +749,7 @@ async function renderCustomersPage(container) {
           </svg>
           <input type="text" id="customerSearchInput" placeholder="Müşteri ara...">
         </div>
+        ${authServiceFilterHtml}
         <button class="btn-primary" id="newCustomerBtn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -749,7 +785,7 @@ async function renderCustomersPage(container) {
           </thead>
           <tbody id="customersTableBody">
             ${customers.map(c => `
-              <tr data-id="${c.id}" data-name="${(c.full_name || '').toLowerCase()}">
+              <tr data-id="${c.id}" data-name="${(c.full_name || '').toLowerCase()}" data-company="${c.service_id || ''}">
                 <td><small>#${c.id}</small></td>
                 <td>${formatDate(c.created_at)}</td>
                 <td>${c.full_name || '-'}</td>
@@ -768,16 +804,25 @@ async function renderCustomersPage(container) {
     </div>
   `;
 
-  // Search
-  document.getElementById('customerSearchInput')?.addEventListener('input', (e) => {
-    const q = e.target.value.toLowerCase().trim();
+  // Filter Function
+  const filterCustomers = () => {
+    const q = document.getElementById('customerSearchInput').value.toLowerCase().trim();
+    const companyFilter = document.getElementById('custCompanyFilter')?.value || '';
+    
     document.querySelectorAll('#customersTableBody tr').forEach(tr => {
       const id = tr.dataset.id;
       const name = tr.dataset.name;
-      const matches = !q || id.includes(q) || name.includes(q) || `#${id}`.includes(q);
-      tr.style.display = matches ? '' : 'none';
+      const company = tr.dataset.company;
+      
+      const matchesSearch = !q || id.includes(q) || name.includes(q) || `#${id}`.includes(q);
+      const matchesCompany = !companyFilter || company === companyFilter;
+      
+      tr.style.display = (matchesSearch && matchesCompany) ? '' : 'none';
     });
-  });
+  };
+
+  document.getElementById('customerSearchInput')?.addEventListener('input', filterCustomers);
+  document.getElementById('custCompanyFilter')?.addEventListener('change', filterCustomers);
 
   // New customer
   document.getElementById('newCustomerBtn')?.addEventListener('click', openNewCustomerModal);
@@ -900,7 +945,22 @@ async function openNewCustomerModal() {
 
 // ===== PERSONNEL PAGE =====
 async function renderPersonnelPage(container) {
-  const personnel = await apiGet('/api/personnel');
+  const [personnel, authServices] = await Promise.all([
+    apiGet('/api/personnel'),
+    currentUser.role === 'admin' ? apiGet('/api/admin/authorized-services-list') : Promise.resolve([])
+  ]);
+
+  let authServiceFilterHtml = '';
+  if (currentUser.role === 'admin') {
+    authServiceFilterHtml = `
+      <div class="filter-group">
+        <select id="persCompanyFilter" class="filter-select">
+          <option value="">Tüm Firmalar</option>
+          ${authServices.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
 
   container.innerHTML = `
     <div class="page-header">
@@ -920,6 +980,7 @@ async function renderPersonnelPage(container) {
             <option value="personel">Saha Personeli</option>
           </select>
         </div>
+        ${authServiceFilterHtml}
         <button class="btn-primary" id="newPersonnelBtn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -956,7 +1017,7 @@ async function renderPersonnelPage(container) {
           </thead>
           <tbody id="personnelTableBody">
             ${personnel.map(p => `
-              <tr data-id="${p.id}" data-name="${(p.full_name || '').toLowerCase()}" data-role="${p.role}">
+              <tr data-id="${p.id}" data-name="${(p.full_name || '').toLowerCase()}" data-role="${p.role}" data-company="${p.service_id || ''}">
                 <td><small>#${p.id}</small></td>
                 <td>${p.full_name}</td>
                 <td>${p.position || '-'}</td>
@@ -994,21 +1055,25 @@ async function renderPersonnelPage(container) {
   const filterPersonnel = () => {
     const searchTerm = document.getElementById('personnelSearchInput').value.toLowerCase().trim();
     const roleFilter = document.getElementById('roleFilter').value;
+    const companyFilter = document.getElementById('persCompanyFilter')?.value || '';
     
     document.querySelectorAll('#personnelTableBody tr').forEach(tr => {
       const id = tr.dataset.id;
       const name = tr.dataset.name;
       const role = tr.dataset.role;
+      const company = tr.dataset.company;
       
       const matchesSearch = !searchTerm || id.includes(searchTerm) || name.includes(searchTerm) || `#${id}`.includes(searchTerm);
       const matchesRole = !roleFilter || role === roleFilter;
+      const matchesCompany = !companyFilter || company === companyFilter;
       
-      tr.style.display = (matchesSearch && matchesRole) ? '' : 'none';
+      tr.style.display = (matchesSearch && matchesRole && matchesCompany) ? '' : 'none';
     });
   };
 
   document.getElementById('personnelSearchInput')?.addEventListener('input', filterPersonnel);
   document.getElementById('roleFilter')?.addEventListener('change', filterPersonnel);
+  document.getElementById('persCompanyFilter')?.addEventListener('change', filterPersonnel);
 
   document.getElementById('newPersonnelBtn')?.addEventListener('click', openNewPersonnelModal);
 
