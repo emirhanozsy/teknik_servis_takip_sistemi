@@ -1,4 +1,4 @@
-# Teknik Servis Yönetim Sistemi
+# Teknik Servis Takip Sitesi
 
 Modern, hızlı ve güvenli teknik servis takip ve yönetim platformu.
 
