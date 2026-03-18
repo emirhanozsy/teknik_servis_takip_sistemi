@@ -217,4 +217,209 @@ router.delete('/vehicles/:id', requireManager, (req, res) => {
   res.json({ success: true });
 });
 
+// Get payment categories
+router.get('/payment-categories', requireAuth, (req, res) => {
+  const user = req.session.user;
+  let serviceId = user.service_id;
+
+  if (user.role === 'admin' && !serviceId) {
+    const firstService = db.prepare('SELECT id FROM authorized_services LIMIT 1').get();
+    if (firstService) serviceId = firstService.id;
+  }
+
+  const categories = db.prepare('SELECT * FROM payment_categories WHERE service_id = ? ORDER BY name ASC').all(serviceId || 0);
+  res.json(categories);
+});
+
+// Add payment category
+router.post('/payment-categories', requireAdmin, (req, res) => {
+  const user = req.session.user;
+  const { name } = req.body;
+  let serviceId = user.service_id;
+
+  if (user.role === 'admin' && !serviceId) {
+    const firstService = db.prepare('SELECT id FROM authorized_services LIMIT 1').get();
+    if (firstService) serviceId = firstService.id;
+  }
+
+  if (!name) return res.status(400).json({ error: 'İsim gereklidir' });
+  if (!serviceId) return res.status(400).json({ error: 'Servis ID bulunamadı' });
+
+  const result = db.prepare('INSERT INTO payment_categories (service_id, name) VALUES (?, ?)').run(serviceId, name);
+  res.json({ success: true, id: result.lastInsertRowid });
+});
+
+// Delete payment category
+router.delete('/payment-categories/:id', requireAdmin, (req, res) => {
+  const category = db.prepare('SELECT * FROM payment_categories WHERE id = ?').get(req.params.id);
+
+  if (!category) return res.status(404).json({ error: 'Ödeme türü bulunamadı' });
+
+  db.prepare('DELETE FROM payment_categories WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// Get payment methods
+router.get('/payment-methods', requireAuth, (req, res) => {
+  const user = req.session.user;
+  let serviceId = user.service_id;
+
+  if (user.role === 'admin' && !serviceId) {
+    const firstService = db.prepare('SELECT id FROM authorized_services LIMIT 1').get();
+    if (firstService) serviceId = firstService.id;
+  }
+
+  const methods = db.prepare('SELECT * FROM payment_methods WHERE service_id = ? ORDER BY name ASC').all(serviceId || 0);
+  res.json(methods);
+});
+
+// Add payment method
+router.post('/payment-methods', requireAdmin, (req, res) => {
+  const user = req.session.user;
+  const { name } = req.body;
+  let serviceId = user.service_id;
+
+  if (user.role === 'admin' && !serviceId) {
+    const firstService = db.prepare('SELECT id FROM authorized_services LIMIT 1').get();
+    if (firstService) serviceId = firstService.id;
+  }
+
+  if (!name) return res.status(400).json({ error: 'İsim gereklidir' });
+  if (!serviceId) return res.status(400).json({ error: 'Servis ID bulunamadı' });
+
+  const result = db.prepare('INSERT INTO payment_methods (service_id, name) VALUES (?, ?)').run(serviceId, name);
+  res.json({ success: true, id: result.lastInsertRowid });
+});
+
+// Delete payment method
+router.delete('/payment-methods/:id', requireAdmin, (req, res) => {
+  const method = db.prepare('SELECT * FROM payment_methods WHERE id = ?').get(req.params.id);
+
+  if (!method) return res.status(404).json({ error: 'Ödeme şekli bulunamadı' });
+
+  db.prepare('DELETE FROM payment_methods WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// Update payment category settings
+router.put('/payment-categories/:id', requireAdmin, (req, res) => {
+  const { 
+    name, 
+    ask_description, 
+    ask_personnel, 
+    ask_service_no, 
+    ask_supplier, 
+    direction, 
+    is_service_payment, 
+    is_stock_payment 
+  } = req.body;
+  const categoryId = req.params.id;
+
+  const category = db.prepare('SELECT * FROM payment_categories WHERE id = ?').get(categoryId);
+  if (!category) return res.status(404).json({ error: 'Ödeme türü bulunamadı' });
+
+  db.prepare(`
+    UPDATE payment_categories 
+    SET name = ?, 
+        ask_description = ?, 
+        ask_personnel = ?, 
+        ask_service_no = ?, 
+        ask_supplier = ?, 
+        direction = ?, 
+        is_service_payment = ?, 
+        is_stock_payment = ?
+    WHERE id = ?
+  `).run(
+    name || category.name,
+    ask_description !== undefined ? ask_description : category.ask_description,
+    ask_personnel !== undefined ? ask_personnel : category.ask_personnel,
+    ask_service_no !== undefined ? ask_service_no : category.ask_service_no,
+    ask_supplier !== undefined ? ask_supplier : category.ask_supplier,
+    direction || category.direction,
+    is_service_payment !== undefined ? is_service_payment : category.is_service_payment,
+    is_stock_payment !== undefined ? is_stock_payment : category.is_stock_payment,
+    categoryId
+  );
+
+  res.json({ success: true });
+});
+
+// Get personnel positions
+router.get('/positions', requireAuth, (req, res) => {
+  const user = req.session.user;
+  let serviceId = user.service_id;
+
+  if (user.role === 'admin' && !serviceId) {
+    const firstService = db.prepare('SELECT id FROM authorized_services LIMIT 1').get();
+    if (firstService) serviceId = firstService.id;
+  }
+
+  const positions = db.prepare('SELECT * FROM personnel_positions WHERE service_id = ? ORDER BY name ASC').all(serviceId || 0);
+  res.json(positions);
+});
+
+// Add personnel position
+router.post('/positions', requireAdmin, (req, res) => {
+  const user = req.session.user;
+  const { name } = req.body;
+  let serviceId = user.service_id;
+
+  if (user.role === 'admin' && !serviceId) {
+    const firstService = db.prepare('SELECT id FROM authorized_services LIMIT 1').get();
+    if (firstService) serviceId = firstService.id;
+  }
+
+  if (!name) return res.status(400).json({ error: 'İsim gereklidir' });
+  if (!serviceId) return res.status(400).json({ error: 'Servis ID bulunamadı' });
+
+  // Default permissions placeholder
+  const defaultPermissions = JSON.stringify({
+    all_services_view: 'none',
+    delete_service: 'none',
+    delete_service_action: 'none',
+    customer_edit: 'none',
+    personnel_edit: 'none',
+    stock_view: 'none',
+    finance_view: 'none',
+    settings_view: 'none',
+    membership_info_view: 'none'
+  });
+
+  const result = db.prepare('INSERT INTO personnel_positions (service_id, name, permissions, base_role) VALUES (?, ?, ?, ?)').run(serviceId, name, defaultPermissions, 'personel');
+  res.json({ success: true, id: result.lastInsertRowid });
+});
+
+// Update personnel position (including permissions and visible stages)
+router.put('/positions/:id', requireAdmin, (req, res) => {
+  const { name, permissions, visible_stages } = req.body;
+  const positionId = req.params.id;
+
+  const position = db.prepare('SELECT * FROM personnel_positions WHERE id = ?').get(positionId);
+  if (!position) return res.status(404).json({ error: 'Pozisyon bulunamadı' });
+
+  db.prepare(`
+    UPDATE personnel_positions 
+    SET name = ?, permissions = ?, visible_stages = ?, base_role = ?
+    WHERE id = ?
+  `).run(
+    name || position.name,
+    permissions ? JSON.stringify(permissions) : position.permissions,
+    visible_stages ? JSON.stringify(visible_stages) : position.visible_stages,
+    req.body.base_role || position.base_role,
+    positionId
+  );
+
+  res.json({ success: true });
+});
+
+// Delete personnel position
+router.delete('/positions/:id', requireAdmin, (req, res) => {
+  const position = db.prepare('SELECT * FROM personnel_positions WHERE id = ?').get(req.params.id);
+
+  if (!position) return res.status(404).json({ error: 'Pozisyon bulunamadı' });
+
+  db.prepare('DELETE FROM personnel_positions WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
 module.exports = router;

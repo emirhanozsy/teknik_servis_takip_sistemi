@@ -34,7 +34,7 @@ Modern, hızlı ve güvenli teknik servis takip ve yönetim platformu.
    ```
    *Not: Varsayılan admin bilgileri: `admin / admin123`*
 
-3. Tarayıcınızda açın: `http://localhost:3000`
+3. Tarayıcınızda açın: `http://localhost:3001`
 
 ## 📂 Dosya Yapısı
 

@@ -11,9 +11,10 @@ router.post('/login', (req, res) => {
   }
 
   const user = db.prepare(`
-    SELECT p.*, a.name as service_name 
+    SELECT p.*, a.name as service_name, pp.permissions, pp.visible_stages
     FROM personnel p 
     LEFT JOIN authorized_services a ON p.service_id = a.id 
+    LEFT JOIN personnel_positions pp ON p.position = pp.name AND p.service_id = pp.service_id
     WHERE p.username = ?
   `).get(username);
 
@@ -33,7 +34,10 @@ router.post('/login', (req, res) => {
     service_id: user.service_id,
     service_name: user.service_name,
     position: user.position,
-    profile_picture: user.profile_picture
+    profile_picture: user.profile_picture,
+    title: user.title,
+    permissions: user.permissions ? JSON.parse(user.permissions) : null,
+    visible_stages: user.visible_stages ? JSON.parse(user.visible_stages) : null
   };
 
   res.json({ success: true, user: req.session.user });

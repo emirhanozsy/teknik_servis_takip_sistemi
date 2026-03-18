@@ -5,7 +5,7 @@ async function test() {
   
   const loginOptions = {
     hostname: 'localhost',
-    port: 3000,
+    port: 3001,
     path: '/api/auth/login',
     method: 'POST',
     headers: {
@@ -31,7 +31,7 @@ async function test() {
   async function getApi(path) {
     const options = {
       hostname: 'localhost',
-      port: 3000,
+      port: 3001,
       path: path,
       method: 'GET',
       headers: { 'Cookie': cookie }

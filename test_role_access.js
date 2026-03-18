@@ -4,7 +4,7 @@ async function apiCall(method, path, data, cookie) {
   const body = data ? JSON.stringify(data) : '';
   const options = {
     hostname: 'localhost',
-    port: 3000,
+    port: 3001,
     path: path,
     method: method,
     headers: {
@@ -44,7 +44,7 @@ async function loginAndGetCookie(username, password) {
   const body = JSON.stringify({ username, password });
   const options = {
     hostname: 'localhost',
-    port: 3000,
+    port: 3001,
     path: '/api/auth/login',
     method: 'POST',
     headers: {

@@ -23,11 +23,11 @@ function initApp() {
   // Set user info
   document.getElementById('userName').textContent = currentUser.full_name;
   const roleMap = {
-    'admin': 'Sistem Yöneticisi',
+    'admin': 'Patron',
     'yönetici': 'Hizmet Yöneticisi',
     'personel': 'Saha Personeli'
   };
-  document.getElementById('userRole').textContent = roleMap[currentUser.role] || (currentUser.service_name || 'Personel');
+  document.getElementById('userRole').textContent = currentUser.title || roleMap[currentUser.role] || (currentUser.service_name || 'Personel');
   
   const avatarEl = document.getElementById('userAvatar');
   if (currentUser.profile_picture) {
@@ -36,11 +36,8 @@ function initApp() {
     avatarEl.textContent = currentUser.full_name.charAt(0).toUpperCase();
   }
 
-  // Hide Personnel and Settings for staff
-  if (currentUser.role === 'personel') {
-    document.querySelector('.nav-item[data-page="personnel"]')?.style.setProperty('display', 'none');
-    document.querySelector('.nav-item[data-page="settings"]')?.style.setProperty('display', 'none');
-  }
+  // Permissions-based UI Enforcement
+  applyPermissions();
 
   // Admin class
   if (currentUser.role === 'admin') {
@@ -104,8 +101,62 @@ function initApp() {
   });
 
   // Render initial page
-  // Render initial page
   renderPage('home');
+}
+
+function hasPermission(module, level = 'view') {
+  if (!currentUser) return false;
+  if (currentUser.role === 'admin') return true;
+  if (!currentUser.permissions) return false;
+
+  const userPerm = currentUser.permissions[module];
+  if (!userPerm || userPerm === 'none') return false;
+
+  // Specific logic for different modules
+  if (module === 'all_services_view') {
+    if (level === 'all') return userPerm === 'all';
+    if (level === 'own') return userPerm === 'own' || userPerm === 'all';
+    return userPerm !== 'none';
+  }
+
+  if (module === 'customer_edit' || module === 'personnel_edit') {
+    if (level === 'edit') return userPerm === 'edit';
+    if (level === 'view') return userPerm === 'view' || userPerm === 'edit';
+    return false;
+  }
+
+  if (module === 'finance_view') {
+    if (level === 'view') return ['view', 'expense', 'view_only'].includes(userPerm);
+    if (level === 'expense') return userPerm === 'expense' || userPerm === 'view';
+    if (level === 'view_only') return userPerm === 'view_only';
+    return false;
+  }
+
+  // Boolean-like permissions (stock_view, settings_view, delete_service, delete_service_action)
+  if (level === 'yes' || level === 'view' || level === 'all') return userPerm === 'yes' || userPerm === 'view' || userPerm === 'all';
+  
+  return false;
+}
+
+function applyPermissions() {
+  if (!currentUser) return;
+
+  // Sidebar visibility
+  const navPersonnel = document.querySelector('.nav-item[data-page="personnel"]');
+  if (navPersonnel && !hasPermission('personnel_edit', 'view')) {
+    navPersonnel.style.display = 'none';
+  }
+
+  const navSettings = document.querySelector('.nav-item[data-page="settings"]');
+  if (navSettings && !hasPermission('settings_view')) {
+    navSettings.style.display = 'none';
+  }
+
+  // Example for finance if it existed in sidebar
+  const navFinance = document.querySelector('.nav-item[data-page="finance"]');
+  if (navFinance && !hasPermission('finance_view', 'view')) {
+    navFinance.style.display = 'none';
+  }
 }
 
 // ===== Page Router =====
@@ -150,10 +201,12 @@ async function renderDashboardPage(container) {
           <span class="stat-label">Personel Sayısı</span>
           <span class="stat-value">${stats.personnel || 0}</span>
         </div>
+        ${hasPermission('finance_view', 'view') ? `
         <div class="stat-row">
           <span class="stat-label">Kasa Durumu</span>
           <span class="stat-value">${(stats.cash || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL</span>
         </div>
+        ` : ''}
       </div>
       <div class="dashboard-profile-side">
         <div class="dashboard-avatar">
@@ -161,7 +214,7 @@ async function renderDashboardPage(container) {
         </div>
         <div class="dashboard-user-info">
           <div class="dashboard-user-name">${currentUser.full_name}</div>
-          <div class="dashboard-user-role">${roleMap[currentUser.role] || 'Personel'}</div>
+          <div class="dashboard-user-role">${currentUser.title || roleMap[currentUser.role] || 'Personel'}</div>
         </div>
       </div>
     </div>
@@ -250,13 +303,17 @@ function getStatusBadge(status) {
   return `<span class="badge ${map[key] || 'badge-default'}">${status || 'Beklemede'}</span>`;
 }
 
-function openModal(html) {
-  document.getElementById('modalContent').innerHTML = html;
+function openModal(html, wide = false) {
+  const modal = document.getElementById('modalContent');
+  modal.innerHTML = html;
+  if (wide) modal.classList.add('wide');
+  else modal.classList.remove('wide');
   document.getElementById('modalOverlay').classList.add('active');
 }
 
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('active');
+  document.getElementById('modalContent').classList.remove('wide');
 }
 
 async function apiGet(url) {
@@ -425,7 +482,7 @@ async function renderServicesPage(container) {
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                       </svg>
                     </button>
-                    ${(currentUser.role === 'admin' || currentUser.role === 'yönetici') ? `
+                    ${hasPermission('delete_service') ? `
                       <button class="btn-icon delete-service-btn" data-id="${s.id}" title="Sil">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                       </button>
@@ -439,6 +496,22 @@ async function renderServicesPage(container) {
       `}
     </div>
   `;
+
+  // Row Click for Detail (Event Delegation)
+  const tableBody = document.getElementById('servicesTableBody');
+  if (tableBody) {
+    tableBody.addEventListener('click', (e) => {
+      const tr = e.target.closest('tr');
+      if (!tr) return;
+      
+      // Don't trigger if clicking buttons or selects
+      if (e.target.closest('.btn-icon') || e.target.closest('select') || e.target.closest('button')) return;
+      
+      const id = tr.dataset.id;
+      if (id) openServiceDetailModal(id);
+    });
+    tableBody.style.cursor = 'pointer';
+  }
 
   // Filter Function
   const filterServices = () => {
@@ -949,7 +1022,9 @@ async function renderCustomersPage(container) {
                 <td>${[c.city, c.district].filter(Boolean).join(' / ') || '-'}</td>
                 <td>${c.address || '-'}</td>
                 <td>
-                  <button class="btn-danger btn-sm delete-customer-btn" data-id="${c.id}">Sil</button>
+                  ${hasPermission('customer_edit', 'edit') ? `
+                    <button class="btn-danger btn-sm delete-customer-btn" data-id="${c.id}">Sil</button>
+                  ` : '-'}
                 </td>
               </tr>
             `).join('')}
@@ -1152,14 +1227,17 @@ async function renderPersonnelPage(container) {
                   </div>
                 </td>
                 <td>${p.full_name}</td>
-                <td>${p.position || '-'}</td>
+                <td>
+                  ${p.position || '-'}
+                  ${p.title ? `<div style="font-size:0.75rem; opacity:0.6; margin-top:2px;">${p.title}</div>` : ''}
+                </td>
                 <td>${formatDate(p.start_date)}</td>
                 <td>${p.phone || '-'}</td>
                 <td>${p.email || '-'}</td>
                 <td>${p.username}</td>
                 <td>
                   <div style="display:flex;gap:0.25rem;">
-                    ${currentUser.role === 'admin' ? `
+                    ${hasPermission('personnel_edit', 'edit') ? `
                       <button class="btn-icon edit-personnel-btn" data-id="${p.id}" title="Düzenle">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -1167,11 +1245,11 @@ async function renderPersonnelPage(container) {
                         </svg>
                       </button>
                     ` : ''}
-                    ${p.role !== 'admin' ? `
+                    ${(hasPermission('personnel_edit', 'edit') && p.role !== 'admin') ? `
                       <button class="btn-icon delete-personnel-btn" data-id="${p.id}" title="Sil">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                       </button>
-                    ` : '<span class="badge badge-done" style="font-size:0.7rem;">Admin</span>'}
+                    ` : (p.role === 'admin' ? '<span class="badge badge-done" style="font-size:0.7rem;">Admin</span>' : '')}
                   </div>
                 </td>
               </tr>
@@ -1252,7 +1330,7 @@ async function openNewPersonnelModal() {
         </div>
         <div class="form-group">
           <label>Pozisyon</label>
-          <input type="text" id="pers_position" placeholder="Pozisyon">
+          <input type="text" id="pers_position" placeholder="Örn: Usta, Kalfa, Sekreter">
         </div>
         <div class="form-group">
           <label>Başlama Tarihi</label>
@@ -1299,9 +1377,7 @@ async function openNewPersonnelModal() {
         <div class="form-group">
           <label>Yetki / Rol *</label>
           <select id="pers_role" required>
-            <option value="personel">Saha Personeli</option>
-            ${currentUser.role === 'admin' ? '<option value="yönetici">Hizmet Yöneticisi</option>' : ''}
-            ${currentUser.role === 'admin' ? '<option value="admin">Sistem Yöneticisi</option>' : ''}
+            <option value="">Yükleniyor...</option>
           </select>
         </div>
       </div>
@@ -1312,6 +1388,25 @@ async function openNewPersonnelModal() {
       <button class="btn-primary" id="savePersonnelBtn">Kaydet</button>
     </div>
   `);
+
+  // Populate roles from positions
+  let allPositions = [];
+  try {
+    allPositions = await apiGet('/api/settings/positions');
+    const roleSelect = document.getElementById('pers_role');
+    if (roleSelect) {
+      roleSelect.innerHTML = '<option value="">Seçiniz</option>';
+      allPositions.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        opt.dataset.baseRole = p.base_role;
+        roleSelect.appendChild(opt);
+      });
+    }
+  } catch (err) {
+    console.error('Positions fetch error:', err);
+  }
 
   // Image preview
   document.getElementById('pers_profile_pic').addEventListener('change', function(e) {
@@ -1343,7 +1438,11 @@ async function openNewPersonnelModal() {
       formData.append('id_number', document.getElementById('pers_id_number')?.value.trim() || '');
       formData.append('username', document.getElementById('pers_username')?.value.trim() || '');
       formData.append('password', document.getElementById('pers_password')?.value || '');
-      formData.append('role', document.getElementById('pers_role')?.value || 'personel');
+      const roleSelect = document.getElementById('pers_role');
+      const selectedOption = roleSelect?.options[roleSelect.selectedIndex];
+      formData.append('role', selectedOption?.dataset.baseRole || 'personel');
+      formData.append('position', document.getElementById('pers_role')?.value || ''); // Position is the select value
+      formData.append('title', document.getElementById('pers_position')?.value.trim() || ''); // Using position text as a separate title or just updating position
 
       const serviceEl = document.getElementById('pers_service_id');
       if (serviceEl) {
@@ -1415,7 +1514,7 @@ async function openEditPersonnelModal(personnelId, personnelList) {
         </div>
         <div class="form-group">
           <label>Pozisyon</label>
-          <input type="text" id="edit_pers_position" value="${p.position || ''}">
+          <input type="text" id="edit_pers_position" value="${p.position_title || p.position || ''}" placeholder="Örn: Usta, Kalfa, Sekreter">
         </div>
         <div class="form-group">
           <label>Başlama Tarihi</label>
@@ -1460,11 +1559,9 @@ async function openEditPersonnelModal(personnelId, personnelList) {
           <input type="password" id="edit_pers_password" placeholder="Yeni şifre">
         </div>
         <div class="form-group">
-          <label>Yetki / Rol</label>
-          <select id="edit_pers_role" ${currentUser.role !== 'admin' ? 'disabled' : ''}>
-            <option value="personel" ${p.role === 'personel' ? 'selected' : ''}>Saha Personeli</option>
-            <option value="yönetici" ${p.role === 'yönetici' ? 'selected' : ''}>Hizmet Yöneticisi</option>
-            <option value="admin" ${p.role === 'admin' ? 'selected' : ''}>Sistem Yöneticisi</option>
+          <label>Yetki / Rol *</label>
+          <select id="edit_pers_role" required ${currentUser.role !== 'admin' ? 'disabled' : ''}>
+            <option value="">Yükleniyor...</option>
           </select>
         </div>
       </div>
@@ -1476,6 +1573,25 @@ async function openEditPersonnelModal(personnelId, personnelList) {
       <button class="btn-primary" id="saveEditPersonnelBtn">Kaydet</button>
     </div>
   `);
+
+  // Populate roles from positions
+  try {
+    const roles = await apiGet('/api/settings/positions');
+    const roleSelect = document.getElementById('edit_pers_role');
+    if (roleSelect) {
+      roleSelect.innerHTML = '<option value="">Seçiniz</option>';
+      roles.forEach(pos => {
+        const opt = document.createElement('option');
+        opt.value = pos.name;
+        opt.textContent = pos.name;
+        opt.dataset.baseRole = pos.base_role;
+        if (pos.name === p.position) opt.selected = true;
+        roleSelect.appendChild(opt);
+      });
+    }
+  } catch (err) {
+    console.error('Positions fetch error:', err);
+  }
 
   // Image preview
   document.getElementById('edit_pers_profile_pic').addEventListener('change', function(e) {
@@ -1508,7 +1624,11 @@ async function openEditPersonnelModal(personnelId, personnelList) {
       formData.append('id_number', document.getElementById('edit_pers_id_number')?.value.trim() || '');
       formData.append('username', document.getElementById('edit_pers_username')?.value.trim() || '');
       formData.append('password', document.getElementById('edit_pers_password')?.value || '');
-      formData.append('role', document.getElementById('edit_pers_role')?.value || p.role);
+      const roleSelect = document.getElementById('edit_pers_role');
+      const selectedOption = roleSelect?.options[roleSelect.selectedIndex];
+      formData.append('role', selectedOption?.dataset.baseRole || p.role);
+      formData.append('position', document.getElementById('edit_pers_role')?.value || p.position);
+      formData.append('title', document.getElementById('edit_pers_position')?.value.trim() || '');
 
       const fileInput = document.getElementById('edit_pers_profile_pic');
       if (fileInput.files[0]) {
@@ -1537,6 +1657,193 @@ async function openEditPersonnelModal(personnelId, personnelList) {
   });
 }
 
+// ===== SERVICE DETAIL MODAL =====
+async function openServiceDetailModal(id) {
+  const service = await apiGet(`/api/services/${id}`);
+  if (!service || service.error) {
+    console.error('Service load error:', service ? service.error : 'No data');
+    return;
+  }
+
+  const formatDateWithTime = (dateStr) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    return d.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  openModal(`
+    <div class="modal-content detail-modal">
+      <div class="modal-header">
+        <div class="detail-header-top">
+          <h1>SERVİS DETAY (#${service.id})</h1>
+          <div style="display:flex; gap: 1rem; align-items: center;">
+             <button class="btn-icon" title="Yardım"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
+             <button class="btn-icon" onclick="closeModal()" style="color:var(--danger)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+             </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="detail-meta-row">
+          <div class="detail-meta-item"><strong>Kayıt Tarihi:</strong> ${formatDateWithTime(service.created_at)}</div>
+          <div class="detail-meta-item"><strong>Servis Kaynağı:</strong> ${service.service_source || '-'}</div>
+          <div class="detail-meta-item"><strong>Operatör:</strong> ${service.personnel_name || '-'}</div>
+          <div class="locked-indicator">
+            <input type="checkbox" id="lockService" ${service.is_locked ? 'checked' : ''}>
+            <label for="lockService">Servisi Kilitle</label>
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <div class="detail-section">
+            <div class="detail-section-header">
+              <span>Müşteri Bilgisi</span>
+              <button class="btn-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button>
+            </div>
+            <div class="detail-section-body">
+              <table class="info-table">
+                <tr><td>Ad</td><td>: ${service.customer_name || '-'}</td></tr>
+                <tr><td>Telefon</td><td>: ${service.customer_phone || '-'}</td></tr>
+                <tr><td>Adres</td><td>: ${service.customer_address || '-'}</td></tr>
+                <tr><td colspan="2"><hr style="border:0; border-top:1px solid var(--border); margin:0.5rem 0;"></td></tr>
+                <tr><td>Müsait Olma Zamanı</td><td>: ${formatDate(service.availability_date)} - ${service.time_start || '00:00'} ile ${service.time_end || '00:00'} Arası</td></tr>
+                <tr><td>Operatör Notu</td><td>: ${service.operator_note || '-'}</td></tr>
+              </table>
+              <div style="display:flex; gap:0.5rem; margin-top:1rem;">
+                <select id="redirectPersonnel" style="flex:1; padding:0.4rem;">
+                  <option value="">Personel Seçiniz...</option>
+                </select>
+                <button class="btn-primary btn-sm btn-danger" style="background:var(--danger)">Yönlendir</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="detail-section-header">
+              <span>Cihaz Bilgisi</span>
+            </div>
+            <div class="detail-section-body">
+              <table class="info-table">
+                <tr><td>Servis Sahibi</td><td>: PORTAL</td></tr>
+                <tr><td>Cihaz Markası</td><td>: ${service.device_brand || '-'}</td></tr>
+                <tr><td>Cihaz Türü</td><td>: ${service.device_type || '-'}</td></tr>
+                <tr><td>Cihaz Modeli</td><td>: ${service.device_model || '-'}</td></tr>
+                <tr><td>Cihaz Arızası</td><td>: ${service.device_fault || '-'}</td></tr>
+              </table>
+              <div style="margin-top:1rem; padding:0.5rem; border:1px solid var(--border); border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:600;">Garanti Bitiş :</span>
+                <span style="color:var(--danger); font-weight:700;">${service.warranty_period || 'Garanti Yok'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="status-row-bar">
+          <span class="status-label-large">Servis Durumu : <span class="current-status-val" style="color:${(service.status || '').toUpperCase() === 'BEKLEMEDE' ? 'var(--danger)' : 'var(--success)'}">${(service.status || 'BELİRSİZ').toUpperCase()}</span></span>
+          <div style="display:flex; align-items:center; gap:0.5rem; flex:1;">
+            <span class="status-label-large">» Yapılacak İşlemi Seçiniz :</span>
+            <select id="newActionSelect" style="flex:1;">
+              <option value="">Seçiniz...</option>
+              <option value="Servis Alındı">Servis Alındı</option>
+              <option value="Parça Bekleniyor">Parça Bekleniyor</option>
+              <option value="Onarım Tamamlandı">Onarım Tamamlandı</option>
+              <option value="Bilgi Verildi">Bilgi Verildi</option>
+            </select>
+            <button class="btn-primary btn-sm" id="addActionBtn">Ekle</button>
+          </div>
+        </div>
+
+        <div class="detail-section" style="margin-bottom:1.5rem;">
+          <div class="detail-section-header">İşlem Geçmişi</div>
+          <div class="action-history-list" id="actionHistoryList">
+            ${service.actions.length === 0 ? '<div style="padding:1rem; color:var(--danger)">Henüz bir işlem yapmadınız.</div>' : ''}
+            ${service.actions.map(a => `
+              <div class="action-history-item">
+                <div class="action-header">
+                  <span>${a.personnel_name || 'Sistem'}</span>
+                  <span>${formatDateWithTime(a.created_at)}</span>
+                </div>
+                <div class="action-text">${a.action_text}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-section-header">
+            <span>PARA HAREKETLERİ</span>
+            <button class="btn-primary btn-sm" style="background:var(--success)" id="addPaymentBtn">Ödeme Ekle</button>
+          </div>
+          <div class="payment-section">
+            <table class="payment-table">
+              <thead>
+                <tr>
+                  <th>TARİH</th>
+                  <th>İŞLEMİ YAPAN</th>
+                  <th>TAHSİL EDEN</th>
+                  <th>ÖDEME ŞEKLİ</th>
+                  <th>ÖDEME DURUMU</th>
+                  <th>TUTAR</th>
+                  <th>#</th>
+                </tr>
+              </thead>
+              <tbody id="paymentListBody">
+                ${service.payments.length === 0 ? '<tr><td colspan="7" style="padding:1rem; color:var(--danger); text-align:center;">Henüz bir para tahsilatı yapmadınız.</td></tr>' : ''}
+                ${service.payments.map(p => `
+                  <tr>
+                    <td>${formatDate(p.created_at)}</td>
+                    <td>${p.personnel_name || '-'}</td>
+                    <td>-</td>
+                    <td>${p.payment_method || '-'}</td>
+                    <td><span class="payment-status-paid">${p.payment_status || 'Ödendi'}</span></td>
+                    <td style="font-weight:700;">${p.amount.toLocaleString('tr-TR')} TL</td>
+                    <td><button class="btn-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <div style="display:flex; justify-content:flex-end; margin-top:1.5rem;">
+           <button class="btn-primary btn-sm btn-gray" id="addPhotoBtn">Fotoğraf Ekle</button>
+        </div>
+      </div>
+      <div class="modal-detail-footer">
+        <a href="#" style="color:var(--danger); font-size:0.85rem; text-decoration:none;">» Servisi Sil</a>
+        <div class="detail-btn-group">
+          <button class="btn-secondary btn-sm">PDF Fiş</button>
+          <button class="btn-secondary btn-sm">SMS Gönder</button>
+          <button class="btn-secondary btn-sm">Yazdırmak İçin Kopyala</button>
+          <button class="btn-secondary btn-sm">Yazdır</button>
+          <button class="btn-primary btn-sm" style="background:var(--success)" id="updateServiceDetailBtn">Servisi Güncelle</button>
+        </div>
+      </div>
+    </div>
+  `, true);
+
+  // Event Listeners for Modal
+  document.getElementById('addActionBtn').addEventListener('click', async () => {
+    const actionText = document.getElementById('newActionSelect').value;
+    if (!actionText) return;
+    await apiPost(`/api/services/${id}/actions`, { action_text: actionText });
+    openServiceDetailModal(id);
+  });
+
+  document.getElementById('addPaymentBtn').addEventListener('click', async () => {
+    const amount = prompt('Ödeme Tutarı:');
+    if (!amount || isNaN(amount)) return;
+    await apiPost(`/api/services/${id}/payments`, { 
+      amount: parseFloat(amount), 
+      payment_method: 'Nakit', 
+      payment_status: 'Ödendi',
+      description: 'Panelden eklendi'
+    });
+    openServiceDetailModal(id);
+  });
+}
+
 
 
 // ===== SETTINGS PAGE =====
@@ -1550,6 +1857,9 @@ async function renderSettingsPage(container) {
   const stages = await apiGet('/api/settings/stages');
   const sources = await apiGet('/api/settings/sources');
   const vehicles = await apiGet('/api/settings/vehicles');
+  const positions = await apiGet('/api/settings/positions');
+  const paymentCategories = await apiGet('/api/settings/payment-categories');
+  const paymentMethods = await apiGet('/api/settings/payment-methods');
 
   const isAdmin = currentUser.role === 'admin';
   const isManager = currentUser.role === 'yönetici';
@@ -1560,6 +1870,50 @@ async function renderSettingsPage(container) {
     </div>
 
     <div class="settings-hub">
+      <div class="settings-group-premium">
+        <label class="group-label">Personel Ayarları</label>
+        <div class="category-grid">
+           <!-- Personel Pozisyonları Card -->
+            <div class="category-card" onclick="this.classList.toggle('active')">
+              <div class="card-info">
+                <div class="icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div class="details">
+                  <h3>Personel Pozisyonları ve Yetkileri</h3>
+                  <p>${positions.length} Tanımlı</p>
+                </div>
+                <div class="chevron">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+              </div>
+              <div class="card-content" onclick="event.stopPropagation()">
+                <ul class="settings-list compact">
+                  ${positions.map(p => `
+                    <li class="list-item clickable position-item" data-id="${p.id}" title="Yetkileri Düzenle">
+                      <div class="list-item-main">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        <span>${p.name}</span>
+                      </div>
+                      ${isAdmin ? `
+                        <button class="btn-icon delete-position-btn" data-id="${p.id}" onclick="event.stopPropagation()">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                      ` : ''}
+                    </li>
+                  `).join('')}
+                </ul>
+                ${isAdmin ? `
+                  <div class="settings-add-form mini">
+                    <input type="text" id="newPositionName" placeholder="Yeni pozisyon adı">
+                    <button class="btn-primary btn-sm" id="addPositionBtn">Ekle</button>
+                  </div>
+                ` : '<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem;text-align:center;">Sadece görüntüleme yetkiniz var.</p>'}
+              </div>
+            </div>
+        </div>
+      </div>
+
       <div class="settings-group-premium">
         <label class="group-label">Servis Tanımlamaları</label>
         <div class="category-grid">
@@ -1746,6 +2100,85 @@ async function renderSettingsPage(container) {
           </div>
         </div>
       </div>
+
+      <div class="settings-group-premium">
+        <label class="group-label">Kasa Ayarları</label>
+        <div class="category-grid">
+          <!-- Ödeme Türleri Card -->
+          <div class="category-card" onclick="this.classList.toggle('active')">
+            <div class="card-info">
+              <div class="icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              </div>
+              <div class="details">
+                <h3>Ödeme Türleri</h3>
+                <p>${paymentCategories.length} Tanımlı</p>
+              </div>
+              <div class="chevron">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+            </div>
+            <div class="card-content" onclick="event.stopPropagation()">
+              <ul class="settings-list compact">
+                ${paymentCategories.map(c => `
+                  <li class="list-item clickable payment-category-item" data-id="${c.id}" title="Düzenle">
+                    <div class="list-item-main">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      <span>${c.name}</span>
+                    </div>
+                    ${isAdmin ? `
+                      <button class="btn-icon delete-payment-category-btn" data-id="${c.id}" onclick="event.stopPropagation()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                    ` : ''}
+                  </li>
+                `).join('')}
+              </ul>
+              ${isAdmin ? `
+                <div class="settings-add-form mini">
+                  <input type="text" id="newPaymentCategoryName" placeholder="Yeni ödeme türü">
+                  <button class="btn-primary btn-sm" id="addPaymentCategoryBtn">Ekle</button>
+                </div>
+              ` : '<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem;text-align:center;">Sadece görüntüleme yetkiniz var.</p>'}
+            </div>
+          </div>
+          <!-- Ödeme Şekilleri Card -->
+          <div class="category-card" onclick="this.classList.toggle('active')">
+            <div class="card-info">
+              <div class="icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </div>
+              <div class="details">
+                <h3>Ödeme Şekilleri</h3>
+                <p>${paymentMethods.length} Tanımlı</p>
+              </div>
+              <div class="chevron">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+            </div>
+            <div class="card-content" onclick="event.stopPropagation()">
+              <ul class="settings-list compact">
+                ${paymentMethods.map(m => `
+                  <li class="list-item">
+                    <span>${m.name}</span>
+                    ${isAdmin ? `
+                      <button class="btn-icon delete-payment-method-btn" data-id="${m.id}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                    ` : ''}
+                  </li>
+                `).join('')}
+              </ul>
+              ${isAdmin ? `
+                <div class="settings-add-form mini">
+                  <input type="text" id="newPaymentMethodName" placeholder="Yeni ödeme şekli">
+                  <button class="btn-primary btn-sm" id="addPaymentMethodBtn">Ekle</button>
+                </div>
+              ` : '<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem;text-align:center;">Sadece görüntüleme yetkiniz var.</p>'}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -1841,5 +2274,385 @@ async function renderSettingsPage(container) {
         renderSettingsPage(container);
       }
     });
+  });
+
+  // Add Payment Method
+  document.getElementById('addPaymentMethodBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('newPaymentMethodName');
+    const name = input.value.trim();
+    if (!name) return;
+    await apiPost('/api/settings/payment-methods', { name });
+    renderSettingsPage(container);
+  });
+
+  // Delete Payment Method
+  document.querySelectorAll('.delete-payment-method-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Bu ödeme şeklini silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/settings/payment-methods/${btn.dataset.id}`);
+        renderSettingsPage(container);
+      }
+    });
+  });
+
+  // Add Payment Category
+  document.getElementById('addPaymentCategoryBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('newPaymentCategoryName');
+    const name = input.value.trim();
+    if (!name) return;
+    await apiPost('/api/settings/payment-categories', { name });
+    renderSettingsPage(container);
+  });
+
+  // Delete Payment Category
+  document.querySelectorAll('.delete-payment-category-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (confirm('Bu ödeme türünü silmek istediğinize emin misiniz?')) {
+        await apiDelete(`/api/settings/payment-categories/${btn.dataset.id}`);
+        renderSettingsPage(container);
+      }
+    });
+  });
+
+  // Edit Payment Category Settings
+  document.querySelectorAll('.payment-category-item').forEach(item => {
+    item.addEventListener('click', () => openPaymentCategoryModal(item.dataset.id, paymentCategories));
+  });
+
+  // Edit Position Permissions
+  document.querySelectorAll('.position-item').forEach(item => {
+    item.addEventListener('click', () => openPositionPermissionsModal(item.dataset.id, positions, stages));
+  });
+}
+
+// ===== PAYMENT CATEGORY DETAIL MODAL =====
+async function openPaymentCategoryModal(categoryId, categories) {
+  const c = categories.find(item => item.id == categoryId);
+  if (!c) return;
+
+  openModal(`
+    <div class="modal-header glass">
+      <div class="header-content">
+        <h2 style="margin:0;">Ödeme Türü Güncelle</h2>
+      </div>
+      <button class="btn-icon" onclick="closeModal()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body modern-scroll" style="padding: 2rem;">
+      <div class="form-group-premium" style="margin-bottom: 2rem;">
+        <div style="display: flex; align-items: center; margin-bottom: 1rem;">
+          <label style="width: 120px; font-weight: 600; color: var(--text-secondary);">Tür Adı</label>
+          <input type="text" id="edit_pay_cat_name" class="modern-input" style="flex: 1;" value="${c.name}">
+        </div>
+        
+        <div style="display: flex; align-items: flex-start; margin-bottom: 1.5rem;">
+          <label style="width: 120px; font-weight: 600; color: var(--text-secondary); padding-top: 8px;">Seçenekler</label>
+          <div style="flex: 1; display: flex; flex-wrap: wrap; gap: 0.75rem;">
+            <label class="chip-checkbox">
+              <input type="checkbox" id="cat_ask_description" ${c.ask_description ? 'checked' : ''}>
+              <span class="chip-label">
+                <span class="chip-circle"></span>
+                Açıklama Sor
+              </span>
+            </label>
+            <label class="chip-checkbox">
+              <input type="checkbox" id="cat_ask_personnel" ${c.ask_personnel ? 'checked' : ''}>
+              <span class="chip-label">
+                <span class="chip-circle"></span>
+                Personel Sor
+              </span>
+            </label>
+            <label class="chip-checkbox">
+              <input type="checkbox" id="cat_ask_service_no" ${c.ask_service_no ? 'checked' : ''}>
+              <span class="chip-label">
+                <span class="chip-circle"></span>
+                Servis No Sor
+              </span>
+            </label>
+            <label class="chip-checkbox">
+              <input type="checkbox" id="cat_ask_supplier" ${c.ask_supplier ? 'checked' : ''}>
+              <span class="chip-label">
+                <span class="chip-circle"></span>
+                Tedarikçi Sor
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; margin-bottom: 1.5rem;">
+          <label style="width: 120px; font-weight: 600; color: var(--text-secondary);">Ödemenin Yönü</label>
+          <select id="cat_direction" class="auth-select modern" style="flex: 1;">
+            <option value="out" ${c.direction === 'out' ? 'selected' : ''}>Giden Ödeme</option>
+            <option value="in" ${c.direction === 'in' ? 'selected' : ''}>Gelen Ödeme</option>
+          </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-left: 120px;">
+          <label class="chip-checkbox" style="display: block; width: fit-content;">
+            <input type="checkbox" id="cat_is_service_payment" ${c.is_service_payment ? 'checked' : ''}>
+            <span class="chip-label" style="width: 100%; justify-content: flex-start;">
+              <span class="chip-circle"></span>
+              Servis Ödemelerinde Kullanılacak Tür mü?
+            </span>
+          </label>
+          <label class="chip-checkbox" style="display: block; width: fit-content;">
+            <input type="checkbox" id="cat_is_stock_payment" ${c.is_stock_payment ? 'checked' : ''}>
+            <span class="chip-label" style="width: 100%; justify-content: flex-start;">
+              <span class="chip-circle"></span>
+              Stok Alımlarında Kullanılacak Tür mü?
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer glass">
+      <button class="btn-secondary" onclick="closeModal()">Vazgeç</button>
+      <button class="btn-primary" id="savePayCatBtn" style="min-width:120px;">Güncelle</button>
+    </div>
+  `, true);
+
+  document.getElementById('savePayCatBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('savePayCatBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner"></span>';
+
+    const data = {
+      name: document.getElementById('edit_pay_cat_name').value,
+      ask_description: document.getElementById('cat_ask_description').checked ? 1 : 0,
+      ask_personnel: document.getElementById('cat_ask_personnel').checked ? 1 : 0,
+      ask_service_no: document.getElementById('cat_ask_service_no').checked ? 1 : 0,
+      ask_supplier: document.getElementById('cat_ask_supplier').checked ? 1 : 0,
+      direction: document.getElementById('cat_direction').value,
+      is_service_payment: document.getElementById('cat_is_service_payment').checked ? 1 : 0,
+      is_stock_payment: document.getElementById('cat_is_stock_payment').checked ? 1 : 0
+    };
+
+    try {
+      const result = await apiPut(`/api/settings/payment-categories/${categoryId}`, data);
+      if (result.success) {
+        btn.innerHTML = 'Başarılı!';
+        btn.style.background = '#10B981';
+        setTimeout(() => {
+          closeModal();
+          renderPage('settings');
+        }, 1000);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (err) {
+      alert('Hata: ' + err.message);
+      btn.innerHTML = 'Güncelle';
+      btn.disabled = false;
+    }
+  });
+}
+
+// ===== PERSONNEL PERMISSIONS MODAL =====
+async function openPositionPermissionsModal(positionId, positions, stages) {
+  const p = positions.find(item => item.id == positionId);
+  if (!p) return;
+
+  const defaultPermissions = {
+    all_services_view: 'none',
+    delete_service: 'none',
+    delete_service_action: 'none',
+    customer_edit: 'none',
+    personnel_edit: 'none',
+    stock_view: 'none',
+    finance_view: 'none',
+    settings_view: 'none',
+    membership_info_view: 'none'
+  };
+  const permissions = p.permissions ? { ...defaultPermissions, ...JSON.parse(p.permissions) } : defaultPermissions;
+  const visibleStages = p.visible_stages ? JSON.parse(p.visible_stages) : stages.map(s => s.name);
+
+  const authOptions = [
+    { value: 'full', label: 'Tam Yetki (Ekle/Sil/Düzenle)', color: '#10B981' },
+    { value: 'edit', label: 'Düzenleme Yetkisi (Ekle/Düzenle)', color: '#3B82F6' },
+    { value: 'view', label: 'Görüntüleme Yetkisi', color: '#6366F1' },
+    { value: 'none', label: 'Yetki Yok', color: '#EF4444' }
+  ];
+
+  const categories = [
+    { 
+      key: 'all_services_view', 
+      icon: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+      options: [
+        { value: 'all', label: 'Tüm Servisleri Görür' },
+        { value: 'own', label: 'Kendi Servislerini Görür' },
+        { value: 'workshop', label: 'Atölyeyi Görür' },
+        { value: 'external', label: 'Harici Operatör' },
+        { value: 'own_workshop', label: 'Kendi Servislerini Görür (Atölyeci)' },
+        { value: 'none', label: 'Servisleri Göremez' }
+      ]
+    },
+    { 
+      key: 'delete_service', 
+      icon: '<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>',
+      options: [{ value: 'yes', label: 'Servis Silebilir' }, { value: 'no', label: 'Servis Silemez' }]
+    },
+    { 
+      key: 'delete_service_action', 
+      icon: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/><line x1="10" y1="14" x2="14" y2="10"/>',
+      options: [{ value: 'yes', label: 'Servis İşlemini Silebilir' }, { value: 'no', label: 'Servis İşlemini Silemez' }]
+    },
+    { 
+      key: 'customer_edit', 
+      icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M11 19h4"/>',
+      options: [
+        { value: 'full', label: 'Müşteride Değişiklik Yapabilir' },
+        { value: 'view', label: 'Müşterileri Sadece Görür' },
+        { value: 'none', label: 'Müşterileri Göremez' }
+      ]
+    },
+    { 
+      key: 'personnel_edit', 
+      icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+      options: [
+        { value: 'contact', label: 'Personellerin İletişim Bilgilerini Görür' },
+        { value: 'full', label: 'Personelde Değişiklik Yapabilir' },
+        { value: 'none', label: 'Personelleri Göremez' }
+      ]
+    },
+    { 
+      key: 'stock_view', 
+      icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+      options: [{ value: 'yes', label: 'Stokları Görür' }, { value: 'no', label: 'Stokları Göremez' }]
+    },
+    { 
+      key: 'finance_view', 
+      icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+      options: [
+        { value: 'view', label: 'Kasayı Görür' },
+        { value: 'none', label: 'Kasayı Göremez' },
+        { value: 'expense', label: 'Kasaya Gider Girebilir' },
+        { value: 'view_only', label: 'Kasayı Görür ama Değiştiremez' }
+      ]
+    },
+    { 
+      key: 'settings_view', 
+      icon: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      options: [{ value: 'yes', label: 'Ayarları Görür' }, { value: 'no', label: 'Ayarları Göremez' }]
+    },
+    { 
+      key: 'membership_info_view', 
+      icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M22 11l-3 3L17 12"/>',
+      options: [{ value: 'yes', label: 'Üyelik Bilgilerini Görür' }, { value: 'no', label: 'Üyelik Bilgilerini Göremez' }]
+    }
+  ];
+
+  openModal(`
+    <div class="modal-header glass">
+      <div class="header-content">
+        <h2 style="margin:0;">${p.name} Pozisyonu Yetkileri</h2>
+        <p style="margin:0.25rem 0 0; font-size:0.85rem; opacity:0.7;">Sistem genelindeki yetki seviyelerini ve görünürlüğü yönetin</p>
+      </div>
+      <button class="btn-icon" onclick="closeModal()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body modern-scroll" style="max-height: 70vh; overflow-y: auto;">
+      <div class="permissions-split-layout">
+        <div class="permission-column">
+          <div class="permission-section">
+            <h4 class="section-title-premium">Modül Bazlı Yetkiler</h4>
+            
+            <div class="form-group" style="margin-bottom:1.5rem;">
+              <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.5rem; opacity:0.8;">Sistem Yetkisi (Giriş Rolü)</label>
+              <select id="edit_pos_base_role" class="auth-select modern" style="width:100%;">
+                <option value="personel" ${p.base_role === 'personel' ? 'selected' : ''}>Saha Personeli</option>
+                <option value="yönetici" ${p.base_role === 'yönetici' ? 'selected' : ''}>Hizmet Yöneticisi</option>
+                <option value="admin" ${p.base_role === 'admin' ? 'selected' : ''}>Sistem Yöneticisi</option>
+              </select>
+              <p style="font-size:0.7rem; opacity:0.6; margin-top:0.3rem;">Bu seçim, personelin sisteme girişteki temel yetki grubunu belirler.</p>
+            </div>
+
+            <div class="authority-grid">
+              ${categories.map(cat => `
+                <div class="authority-card">
+                  <div class="auth-header">
+                    <div class="auth-icon-wrap">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${cat.icon}</svg>
+                    </div>
+                  </div>
+                  <div class="auth-select-wrap">
+                    <select class="auth-select modern" data-key="${cat.key}">
+                      <option value="">Seçiniz</option>
+                      ${cat.options.map(opt => `<option value="${opt.value}" ${permissions[cat.key] === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}
+                    </select>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="permission-column">
+          <div class="permission-section">
+            <h4 class="section-title-premium">Görünebilir Servis Aşamaları</h4>
+            <p style="font-size:0.8rem; opacity:0.6; margin-bottom:1rem;">Pozisyonun görebileceği aşamaları seçin.</p>
+            <div class="stages-chip-container">
+              ${stages.map(s => `
+                <label class="chip-checkbox">
+                  <input type="checkbox" class="stage-checkbox" value="${s.name}" ${visibleStages.includes(s.name) ? 'checked' : ''}>
+                  <span class="chip-label">
+                    <span class="chip-circle"></span>
+                    ${s.name}
+                  </span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer glass">
+      <button class="btn-secondary" onclick="closeModal()">Vazgeç</button>
+      <button class="btn-primary" id="savePermissionsBtn" style="min-width:120px;">
+        <span class="btn-text">Güncelle</span>
+      </button>
+    </div>
+  `, true);
+
+  // Save Permissions logic
+  document.getElementById('savePermissionsBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('savePermissionsBtn');
+    const OriginalText = btn.innerHTML;
+    btn.innerHTML = '<span class="loading-spinner"></span>';
+    btn.disabled = true;
+
+    const newPermissions = {};
+    document.querySelectorAll('.auth-select').forEach(sel => {
+      newPermissions[sel.dataset.key] = sel.value;
+    });
+
+    const newVisibleStages = [];
+    document.querySelectorAll('.stage-checkbox:checked').forEach(cb => {
+      newVisibleStages.push(cb.value);
+    });
+
+    try {
+      const result = await apiPut(`/api/settings/positions/${positionId}`, {
+        permissions: newPermissions,
+        visible_stages: newVisibleStages,
+        base_role: document.getElementById('edit_pos_base_role').value
+      });
+
+      if (result.success) {
+        btn.innerHTML = 'Başarılı!';
+        btn.style.background = '#10B981';
+        setTimeout(() => {
+          closeModal();
+          renderPage('settings');
+        }, 1000);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (err) {
+      alert('Hata: ' + err.message);
+      btn.innerHTML = OriginalText;
+      btn.disabled = false;
+    }
   });
 }

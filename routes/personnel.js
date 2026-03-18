@@ -45,7 +45,7 @@ router.get('/', requireAuth, (req, res) => {
     rows = db.prepare(`
       SELECT p.id, p.service_id, p.full_name, p.start_date, p.position, p.phone, p.phone2,
              p.city, p.district, p.address, p.email, p.id_number, p.username, p.role, p.created_at,
-             p.profile_picture,
+             p.profile_picture, p.title,
              a.name as authorized_service_name
       FROM personnel p
       LEFT JOIN authorized_services a ON p.service_id = a.id
@@ -55,7 +55,7 @@ router.get('/', requireAuth, (req, res) => {
     rows = db.prepare(`
       SELECT p.id, p.service_id, p.full_name, p.start_date, p.position, p.phone, p.phone2,
              p.city, p.district, p.address, p.email, p.id_number, p.username, p.role, p.created_at,
-             p.profile_picture,
+             p.profile_picture, p.title,
              a.name as authorized_service_name
       FROM personnel p
       LEFT JOIN authorized_services a ON p.service_id = a.id
@@ -82,7 +82,7 @@ router.post('/', requireManager, (req, res, next) => {
   const {
     full_name, start_date, position, phone, phone2,
     city, district, address, email, id_number,
-    username, password, role
+    username, password, role, title
   } = req.body;
 
   if (!full_name || !username || !password) {
@@ -99,14 +99,34 @@ router.post('/', requireManager, (req, res, next) => {
   const finalRole = user.role === 'admin' ? (role || 'personel') : 'personel';
   const profilePicture = req.file ? `/uploads/personnel/${req.file.filename}` : null;
 
-  const result = db.prepare(`
-    INSERT INTO personnel (service_id, full_name, start_date, position, phone, phone2,
-                           city, district, address, email, id_number, username, password_hash, role, profile_picture)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(serviceId, full_name, start_date, position, phone, phone2,
-         city, district, address, email, id_number, username, hash, finalRole, profilePicture);
+  db.prepare(`
+    INSERT INTO personnel (
+      service_id, full_name, start_date, position, title, phone, phone2,
+      city, district, address, email, id_number, username, password_hash, role, profile_picture
+    ) VALUES (
+      @service_id, @full_name, @start_date, @position, @title, @phone, @phone2,
+      @city, @district, @address, @email, @id_number, @username, @password_hash, @role, @profile_picture
+    )
+  `).run({
+    service_id: serviceId ? Number(serviceId) : null,
+    full_name: full_name ? String(full_name) : null,
+    start_date: start_date ? String(start_date) : null,
+    position: position ? String(position) : null,
+    title: title ? String(title) : null,
+    phone: phone ? String(phone) : null,
+    phone2: phone2 ? String(phone2) : null,
+    city: city ? String(city) : null,
+    district: district ? String(district) : null,
+    address: address ? String(address) : null,
+    email: email ? String(email) : null,
+    id_number: id_number ? String(id_number) : null,
+    username: username ? String(username) : null,
+    password_hash: hash ? String(hash) : null,
+    role: finalRole ? String(finalRole) : 'personel',
+    profile_picture: profilePicture ? String(profilePicture) : null
+  });
 
-  res.json({ success: true, id: result.lastInsertRowid });
+  res.json({ success: true });
 });
 
 // Update personnel (Admin or Manager)
@@ -125,7 +145,7 @@ router.put('/:id', requireManager, upload.single('profile_picture'), (req, res) 
   const {
     full_name, start_date, position, phone, phone2,
     city, district, address, email, id_number,
-    username, password, role, service_id
+    username, password, role, service_id, title
   } = req.body;
 
   if (username && username !== person.username) {
@@ -135,46 +155,48 @@ router.put('/:id', requireManager, upload.single('profile_picture'), (req, res) 
     }
   }
 
+  const updateParams = {
+    full_name: (full_name || person.full_name) ? String(full_name || person.full_name) : null,
+    start_date: (start_date !== undefined ? start_date : person.start_date) ? String(start_date !== undefined ? start_date : person.start_date) : null,
+    position: (position !== undefined ? position : person.position) ? String(position !== undefined ? position : person.position) : null,
+    title: (title !== undefined ? title : person.title) ? String(title !== undefined ? title : person.title) : null,
+    phone: (phone !== undefined ? phone : person.phone) ? String(phone !== undefined ? phone : person.phone) : null,
+    phone2: (phone2 !== undefined ? phone2 : person.phone2) ? String(phone2 !== undefined ? phone2 : person.phone2) : null,
+    city: (city !== undefined ? city : person.city) ? String(city !== undefined ? city : person.city) : null,
+    district: (district !== undefined ? district : person.district) ? String(district !== undefined ? district : person.district) : null,
+    address: (address !== undefined ? address : person.address) ? String(address !== undefined ? address : person.address) : null,
+    email: (email !== undefined ? email : person.email) ? String(email !== undefined ? email : person.email) : null,
+    id_number: (id_number !== undefined ? id_number : person.id_number) ? String(id_number !== undefined ? id_number : person.id_number) : null,
+    username: (username || person.username) ? String(username || person.username) : null,
+    role: (user.role === 'admin' ? (role || person.role) : person.role) ? String(user.role === 'admin' ? (role || person.role) : person.role) : 'personel',
+    service_id: (user.role === 'admin' ? (service_id !== undefined ? service_id : person.service_id) : person.service_id) ? Number(user.role === 'admin' ? (service_id !== undefined ? service_id : person.service_id) : person.service_id) : null,
+    profile_picture: (req.file ? `/uploads/personnel/${req.file.filename}` : person.profile_picture) ? String(req.file ? `/uploads/personnel/${req.file.filename}` : person.profile_picture) : null,
+    id: req.params.id ? Number(req.params.id) : null
+  };
+
   let query = `
     UPDATE personnel SET 
-      full_name = ?, start_date = ?, position = ?, phone = ?, phone2 = ?,
-      city = ?, district = ?, address = ?, email = ?, id_number = ?,
-      username = ?, role = ?, service_id = ?, profile_picture = ?
+      full_name = @full_name, start_date = @start_date, position = @position, title = @title, 
+      phone = @phone, phone2 = @phone2, city = @city, district = @district, address = @address, 
+      email = @email, id_number = @id_number, username = @username, role = @role, 
+      service_id = @service_id, profile_picture = @profile_picture
   `;
-  const profilePicture = req.file ? `/uploads/personnel/${req.file.filename}` : person.profile_picture;
-  
-  const params = [
-    full_name || person.full_name,
-    start_date !== undefined ? start_date : person.start_date,
-    position !== undefined ? position : person.position,
-    phone !== undefined ? phone : person.phone,
-    phone2 !== undefined ? phone2 : person.phone2,
-    city !== undefined ? city : person.city,
-    district !== undefined ? district : person.district,
-    address !== undefined ? address : person.address,
-    email !== undefined ? email : person.email,
-    id_number !== undefined ? id_number : person.id_number,
-    username || person.username,
-    user.role === 'admin' ? (role || person.role) : person.role,
-    user.role === 'admin' ? (service_id !== undefined ? service_id : person.service_id) : person.service_id,
-    profilePicture
-  ];
 
   if (password) {
-    query += `, password_hash = ?`;
-    params.push(bcrypt.hashSync(password, 10));
+    query += `, password_hash = @password_hash`;
+    updateParams.password_hash = bcrypt.hashSync(password, 10);
   }
 
-  query += ` WHERE id = ?`;
-  params.push(req.params.id);
+  query += ` WHERE id = @id`;
 
-  db.prepare(query).run(...params);
+  db.prepare(query).run(updateParams);
 
   // Update session if editing self
   if (parseInt(req.params.id) === user.id) {
-    req.session.user.full_name = full_name || person.full_name;
-    req.session.user.username = username || person.username;
-    req.session.user.profile_picture = profilePicture;
+    req.session.user.full_name = updateParams.full_name;
+    req.session.user.username = updateParams.username;
+    req.session.user.profile_picture = updateParams.profile_picture;
+    req.session.user.title = updateParams.title;
     if (role && user.role === 'admin') req.session.user.role = role;
   }
 
