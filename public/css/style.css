@@ -997,6 +997,8 @@ tbody td {
 .stat-card.warning .stat-icon { background: var(--warning-bg); color: var(--warning); }
 .stat-card.info .stat-value { color: var(--info); }
 .stat-card.info .stat-icon { background: var(--info-bg); color: var(--info); }
+.stat-card.danger .stat-value { color: var(--danger); }
+.stat-card.danger .stat-icon { background: var(--danger-bg); color: var(--danger); }
 
 /* ===== Animations ===== */
 @keyframes fadeInUp {

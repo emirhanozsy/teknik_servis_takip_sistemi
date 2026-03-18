@@ -293,10 +293,12 @@ function formatDate(dateStr) {
 function getStatusBadge(status) {
   const map = {
     'Beklemede': 'badge-waiting',
+    'aaa beklemede': 'badge-waiting',
     'Devam Ediyor': 'badge-progress',
     'Tamamlandı': 'badge-done',
     'İptal': 'badge-cancelled',
-    'İade Edildi': 'badge-cancelled'
+    'İade Edildi': 'badge-cancelled',
+    'Müşteri İptal Etti': 'badge-cancelled'
   };
   // Normalize key for map
   const key = Object.keys(map).find(k => k.toLowerCase() === (status || '').toLowerCase());
@@ -363,9 +365,11 @@ async function renderServicesPage(container) {
   ]);
 
   const totalCount = services.length;
-  const waitingCount = services.filter(s => s.status === 'Beklemede').length;
-  const progressCount = services.filter(s => s.status === 'Devam Ediyor').length;
+  const waitingCount = services.filter(s => s.status === 'AAA BEKLEMEDE').length;
   const doneCount = services.filter(s => s.status === 'Tamamlandı').length;
+  const cancelStatuses = ['Müşteri İptal Etti', 'İade Edildi', 'İptal', 'Cihaz Tamir Edilemiyor'];
+  const cancelCount = services.filter(s => cancelStatuses.includes(s.status)).length;
+  const progressCount = totalCount - (waitingCount + doneCount + cancelCount);
 
   let authServiceFilterHtml = '';
   // Removed admin-only authorized services filter as per requested refinement
@@ -427,6 +431,13 @@ async function renderServicesPage(container) {
         </div>
         <div class="stat-label">Tamamlandı</div>
         <div class="stat-value">${doneCount}</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </div>
+        <div class="stat-label">İptal Oldu</div>
+        <div class="stat-value">${cancelCount}</div>
       </div>
     </div>
 

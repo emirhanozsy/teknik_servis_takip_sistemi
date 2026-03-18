@@ -1,0 +1,18 @@
+# --- Backend Dependencies (Node.js) ---
+# Bunlar 'npm install' komutu ile yüklenir.
+bcryptjs==2.4.3
+better-sqlite3==11.0.0
+express==4.21.0
+express-session==1.18.0
+multer==2.1.1
+
+# --- Frontend Dependencies (CDN/External) ---
+# Proje içinde CDN üzerinden yüklenen kütüphaneler:
+# - Chart.js (Grafik kütüphanesi - https://cdn.jsdelivr.net/npm/chart.js)
+# - Google Fonts (Inter - https://fonts.googleapis.com)
+
+# --- System Requirements ---
+# Uygulamanın çalışması için gereken araçlar:
+# - Node.js (Önerilen: v18.0.0+)
+# - npm (Paket yöneticisi)
+# - SQLite3 (Veritabanı motoru)
